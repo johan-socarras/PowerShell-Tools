@@ -18,7 +18,7 @@ $RepoOwner = 'your-github-username'
 $RepoName  = 'your-repository-name'
 $GitHubToken = $env:GITHUB_TOKEN # Required only when the report repository is private.
 
-function Get-GitHubHeaders {
+function Get-GitHubHeader {
     if ([string]::IsNullOrWhiteSpace($GitHubToken)) { return @{} }
     return @{
         Authorization = "Bearer $GitHubToken"
@@ -39,7 +39,7 @@ if ($RepoOwner -eq 'your-github-username' -or $RepoName -eq 'your-repository-nam
     exit 1
 }
 
-$headers = Get-GitHubHeaders
+$headers = Get-GitHubHeader
 $folderUri = "https://api.github.com/repos/$RepoOwner/$RepoName/contents/Log/$ReportDate"
 
 try {

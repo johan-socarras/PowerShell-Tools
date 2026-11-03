@@ -1,5 +1,7 @@
 # PowerShell Tools
 
+[![PowerShell checks](https://github.com/johan-socarras/PowerShell-Tools/actions/workflows/powershell-checks.yml/badge.svg)](https://github.com/johan-socarras/PowerShell-Tools/actions/workflows/powershell-checks.yml)
+
 PowerShell tools for IT support and Windows administration. Each tool has its own README with what it does and how to run it, and runs on Windows with no installs or external dependencies.
 
 ## Tools
@@ -19,6 +21,7 @@ A system for distributing one update file from GitHub to many remote locations. 
 - File integrity checks (SHA-256) and atomic file replacement
 - Unattended runs, safe for Windows Task Scheduler
 - Operational reporting
+- Code checks on every change: syntax in Windows PowerShell 5.1 and PowerShell 7, plus PSScriptAnalyzer, in GitHub Actions
 
 ## License
 

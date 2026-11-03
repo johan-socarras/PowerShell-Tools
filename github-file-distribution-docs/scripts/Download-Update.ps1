@@ -1,3 +1,4 @@
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'PauseAtEnd', Justification = 'Read by Write-CompletionPause.')]
 param(
     [switch]$PauseAtEnd
 )
@@ -42,7 +43,7 @@ function Test-Configuration {
     }
 }
 
-function Get-GitHubHeaders {
+function Get-GitHubHeader {
     return @{
         Authorization = "Bearer $GitHubToken"
         Accept = 'application/vnd.github+json'
@@ -50,12 +51,13 @@ function Get-GitHubHeaders {
     }
 }
 
-function Get-PendingReports {
+function Get-PendingReport {
     if (-not (Test-Path -LiteralPath $PendingQueue)) { return @() }
     try {
         $raw = Get-Content -LiteralPath $PendingQueue -Raw -ErrorAction Stop
         if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
-        return @($raw | ConvertFrom-Json -ErrorAction Stop)
+        # Windows PowerShell 5.1 returns a JSON array as one object; ForEach-Object unrolls it there too.
+        return @($raw | ConvertFrom-Json -ErrorAction Stop | ForEach-Object { $_ })
     } catch {
         Write-Warning "Unable to read the pending report queue: $($_.Exception.Message)"
         return @()
@@ -74,7 +76,7 @@ function Save-PendingReport {
             New-Item -ItemType Directory -Path $queueDirectory -Force -ErrorAction Stop | Out-Null
         }
 
-        $queue = @(Get-PendingReports)
+        $queue = @(Get-PendingReport)
         $queue += [pscustomobject]@{
             SiteID = $SiteID
             Status = $Status
@@ -101,7 +103,7 @@ function Send-Report {
         $textContent = "SiteID: $SiteID`nStatus: $Status`nTimestamp: $($Timestamp.ToString('o'))`n"
         $base64Content = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($textContent))
         $uri = "https://api.github.com/repos/$RepoOwner/$RepoName/contents/Log/$reportDate/$SiteID.txt"
-        $headers = Get-GitHubHeaders
+        $headers = Get-GitHubHeader
 
         $sha = $null
         try {
@@ -109,6 +111,7 @@ function Send-Report {
             $sha = $existingFile.sha
         } catch {
             # A missing report is expected. A failed PUT below is handled and queued.
+            Write-Verbose "No existing report to update: $($_.Exception.Message)"
         }
 
         $body = @{
@@ -128,8 +131,8 @@ function Send-Report {
     }
 }
 
-function Process-PendingReports {
-    foreach ($report in @(Get-PendingReports)) {
+function Send-PendingReport {
+    foreach ($report in @(Get-PendingReport)) {
         $timestamp = [datetime]$report.Timestamp
         if (-not (Send-Report -Status $report.Status -Timestamp $timestamp -QueueOnFailure $false)) {
             return
@@ -155,7 +158,7 @@ function Get-DownloadedSha256 {
 
 try {
     Test-Configuration
-    Process-PendingReports
+    Send-PendingReport
 } catch {
     Write-Error $_.Exception.Message
     Write-CompletionPause

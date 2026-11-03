@@ -1,0 +1,47 @@
+name: PowerShell checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $problems = foreach ($file in Get-ChildItem -Recurse -Filter *.ps1) {
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$parseErrors)
+            $parseErrors | ForEach-Object { "$($file.Name):$($_.Extent.StartLineNumber) $($_.Message)" }
+          }
+          $problems
+          if ($problems) { exit 1 }
+
+      - name: Syntax check (PowerShell 7)
+        shell: pwsh
+        run: |
+          $problems = foreach ($file in Get-ChildItem -Recurse -Filter *.ps1) {
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$parseErrors)
+            $parseErrors | ForEach-Object { "$($file.Name):$($_.Extent.StartLineNumber) $($_.Message)" }
+          }
+          $problems
+          if ($problems) { exit 1 }
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+          $results | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize -Wrap
+          if ($results) { exit 1 }

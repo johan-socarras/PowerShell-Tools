@@ -2,6 +2,10 @@
 
 A local web app for finding and safely removing duplicate files and folders on Windows, built entirely in PowerShell — no installs, no external dependencies.
 
+![Duplicate Finder results: duplicate files and a duplicate backup folder, one copy selected for deletion](screenshot.png)
+
+*Scan results on sample data.*
+
 ## What it does
 
 - Scans chosen folders, drives, or individual files for duplicates with identical content (same size and MD5 hash).

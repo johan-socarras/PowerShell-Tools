@@ -10,7 +10,7 @@ Add-Type -AssemblyName System.Web
 
 # ---------- Shared helpers (main thread) ----------
 
-function Get-Presets {
+function Get-Preset {
     $userHome = $env:USERPROFILE
     $oneDrive = $env:OneDrive
     if (-not $oneDrive) { $oneDrive = Join-Path $userHome 'OneDrive' }
@@ -57,7 +57,7 @@ function Get-BrowseListing {
             $files = @([System.IO.Directory]::GetFiles($Path) | Sort-Object | ForEach-Object {
                 [pscustomobject]@{ name = (Split-Path $_ -Leaf); path = $_ }
             })
-        } catch { }
+        } catch { Write-Verbose "Can't list the files in ${Path}: $($_.Exception.Message)" }
     }
 
     $parent = Split-Path $Path -Parent
@@ -327,23 +327,23 @@ function Read-JsonBody {
     return $text | ConvertFrom-Json
 }
 
-$Global:Jobs = [hashtable]::Synchronized(@{})
-$Global:JobHandles = @{}
-$Global:JobCounter = 0
+$script:Jobs = [hashtable]::Synchronized(@{})
+$script:JobHandles = @{}
+$script:JobCounter = 0
 
-function New-BackgroundJob {
+function Invoke-BackgroundJob {
     param([scriptblock]$Script, [object[]]$ArgList)
-    $Global:JobCounter++
-    $id = "job$($Global:JobCounter)"
+    $script:JobCounter++
+    $id = "job$($script:JobCounter)"
     $state = [hashtable]::Synchronized(@{ Status = 'running'; Phase = 'starting'; Error = $null; Result = $null })
-    $Global:Jobs[$id] = $state
+    $script:Jobs[$id] = $state
 
     $ps = [powershell]::Create()
     [void]$ps.AddScript($Script)
     foreach ($a in $ArgList) { [void]$ps.AddArgument($a) }
     [void]$ps.AddArgument($state)
     $handle = $ps.BeginInvoke()
-    $Global:JobHandles[$id] = @{ PS = $ps; Handle = $handle }
+    $script:JobHandles[$id] = @{ PS = $ps; Handle = $handle }
     return $id
 }
 
@@ -898,7 +898,7 @@ while ($listener.IsListening) {
             Write-HtmlResponse -Response $response -Html $PageHtml
         }
         elseif ($method -eq 'GET' -and $path -eq '/api/presets') {
-            Write-JsonResponse -Response $response -Data (Get-Presets)
+            Write-JsonResponse -Response $response -Data (Get-Preset)
         }
         elseif ($method -eq 'GET' -and $path -eq '/api/browse') {
             $qs = [System.Web.HttpUtility]::ParseQueryString($request.Url.Query)
@@ -909,14 +909,14 @@ while ($listener.IsListening) {
         elseif ($method -eq 'POST' -and $path -eq '/api/scan/start') {
             $body = Read-JsonBody -Request $request
             $folders = @($body.folders)
-            $id = New-BackgroundJob -Script $ScanWorkerScript -ArgList @(, $folders)
+            $id = Invoke-BackgroundJob -Script $ScanWorkerScript -ArgList @(, $folders)
             Write-JsonResponse -Response $response -Data @{ id = $id }
         }
         elseif ($method -eq 'GET' -and $path -eq '/api/job/progress') {
             $qs = [System.Web.HttpUtility]::ParseQueryString($request.Url.Query)
             $id = $qs['id']
-            if ($Global:Jobs.ContainsKey($id)) {
-                $state = $Global:Jobs[$id]
+            if ($script:Jobs.ContainsKey($id)) {
+                $state = $script:Jobs[$id]
                 $data = @{
                     status = $state.Status; phase = $state.Phase; error = $state.Error
                     filesFound = $state.FilesFound; filesRead = $state.FilesRead
@@ -924,13 +924,13 @@ while ($listener.IsListening) {
                     result = $state.Result
                 }
                 Write-JsonResponse -Response $response -Data $data
-                if ($state.Status -in @('done', 'error') -and $Global:JobHandles.ContainsKey($id)) {
+                if ($state.Status -in @('done', 'error') -and $script:JobHandles.ContainsKey($id)) {
                     try {
-                        $j = $Global:JobHandles[$id]
+                        $j = $script:JobHandles[$id]
                         $j.PS.EndInvoke($j.Handle) | Out-Null
                         $j.PS.Dispose()
-                    } catch { }
-                    $Global:JobHandles.Remove($id)
+                    } catch { Write-Verbose "Could not release the finished job ${id}: $($_.Exception.Message)" }
+                    $script:JobHandles.Remove($id)
                 }
             } else {
                 Write-JsonResponse -Response $response -Data @{ status = 'unknown' } -StatusCode 404
@@ -980,7 +980,7 @@ while ($listener.IsListening) {
         try {
             $response.StatusCode = 500
             Write-JsonResponse -Response $response -Data @{ error = $_.Exception.Message } -StatusCode 500
-        } catch { }
+        } catch { Write-Verbose "Could not send the error response: $($_.Exception.Message)" }
     } finally {
         $response.OutputStream.Close()
     }

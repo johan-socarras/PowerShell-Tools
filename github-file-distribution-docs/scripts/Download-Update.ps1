@@ -6,7 +6,7 @@ param(
 # CONFIGURATION
 # ==========================================
 
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 # The administrator publishes both files. The checksum file must contain the SHA-256 hash
 # of the update file (for example: "ABCD... UpdatePackage.txt").
@@ -30,6 +30,9 @@ function Write-CompletionPause {
 }
 
 function Test-Configuration {
+    if ($DownloadUrl -match 'example-owner|example-update-repository') {
+        throw 'Configure DownloadUrl before running this script.'
+    }
     if ([string]::IsNullOrWhiteSpace($SiteID)) { throw 'SiteID must be configured.' }
     if ($RepoOwner -eq 'your-github-username' -or $RepoName -eq 'your-repository-name') {
         throw 'Configure RepoOwner and RepoName before running this script.'

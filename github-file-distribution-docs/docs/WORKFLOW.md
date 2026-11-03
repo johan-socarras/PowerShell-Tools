@@ -5,21 +5,21 @@
 ```text
 Administrator
     |
-    | Uploads updated file
+    | Publishes the file and its checksum
     v
-GitHub Repository
+Update repository (public)
     |
     | Remote locations download file
     v
 Remote Location Script
     |
-    | Compares local and remote file
+    | Verifies the checksum, compares local and remote file
     v
 Local File Updated
     |
     | Sends status report
     v
-GitHub Daily Logs
+Report repository (daily logs)
 ```
 
 ## Daily Reporting Workflow
@@ -29,7 +29,7 @@ Administrator runs Generate-DailyReport.ps1
     |
     | Reads expected locations
     v
-Checks GitHub daily log folder
+Checks the day's log folder in the report repository
     |
     | Compares expected vs reported
     v
@@ -38,7 +38,7 @@ Displays missing locations
 
 ## Example Daily Process
 
-1. Upload the new update file to the repository.
+1. Publish the new update file and its checksum in the update repository.
 2. Wait for all remote locations to run the download script.
 3. Run the daily report script.
 4. Review missing locations.

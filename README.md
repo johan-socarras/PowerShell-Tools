@@ -1,28 +1,25 @@
-# Software Projects
+# PowerShell Tools
 
-This repository is a collection of software projects I've built — scripts, desktop tools, and web apps — covering practical automation, small applications, and full projects built end to end.
+PowerShell tools for IT support and Windows administration. Each tool has its own README with what it does and how to run it, and runs on Windows with no installs or external dependencies.
 
-The goal is to document real, working software: the problem it solves, the approach taken, and the result, rather than isolated code snippets.
-
-## Projects
+## Tools
 
 ### [duplicate-finder](duplicate-finder)
 
-A local web app for finding and safely removing duplicate files and folders on Windows, built entirely in PowerShell. Detects byte-identical duplicate files and whole duplicate folders, runs as a small local web server with a browser UI, and only deletes through the Recycle Bin after explicit confirmation. No installs, no external dependencies.
+A local web app for finding and safely removing duplicate files and folders on Windows. It finds files with identical content and whole duplicate folders, runs as a small local web server with a browser UI, and only deletes through the Recycle Bin after explicit confirmation.
 
 ### [github-file-distribution-docs](github-file-distribution-docs)
 
-A PowerShell-based system for distributing a centralized update file from GitHub to multiple remote locations. Each location downloads the file, verifies it against a published SHA-256 checksum, replaces the local copy atomically, and reports its status back to GitHub. Includes a reporting script an administrator can use to confirm which locations completed the update.
+A system for distributing one update file from GitHub to many remote locations. Each location downloads the file, verifies it against a published SHA-256 checksum, replaces its local copy atomically, and reports its status to a separate GitHub repository. A second script lets an administrator confirm which locations completed the update.
 
-## About This Repository
+## Skills Demonstrated
 
-These projects span a range of skills, including:
+- PowerShell scripting and automation
+- REST APIs (GitHub Contents API) and a local HTTP server
+- File integrity checks (SHA-256) and atomic file replacement
+- Unattended runs, safe for Windows Task Scheduler
+- Operational reporting
 
-* Scripting and automation (PowerShell and other tools)
-* Desktop application development
-* Web application development
-* File, data, and reporting automation
-* System integration (APIs, local servers, file distribution)
-* Task scheduling and unattended execution
+## License
 
-Each project includes its own README with the problem it solves, the approach taken, and how to run it.
+[MIT](LICENSE)

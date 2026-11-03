@@ -2,22 +2,13 @@
 
 This document explains the main configuration values used by the PowerShell scripts.
 
-## Repository Settings
-
-Update these values to match your GitHub repository:
-
-```powershell
-$RepoOwner = "your-github-username"
-$RepoName  = "your-repository-name"
-$Branch    = "main"
-```
-
 ## Update File
 
-Define the file that will be downloaded by each location:
+`Download-Update.ps1` downloads the update from `$DownloadUrl`, a raw file URL in the update repository. That repository must be public, because the download does not send a token. `$FileName` is the name of the local copy.
 
 ```powershell
-$FileName = "UpdatePackage.txt"
+$DownloadUrl = "https://raw.githubusercontent.com/example-owner/example-update-repository/main/UpdatePackage.txt"
+$FileName    = "UpdatePackage.txt"
 ```
 
 The script also requires a SHA-256 checksum URL. Publish a file next to the update, such as `UpdatePackage.txt.sha256`, containing the 64-character SHA-256 value of the update file.
@@ -38,8 +29,17 @@ Example file types:
 - `.csv`
 - `.json`
 - `.xml`
-- database export files
 - configuration files
+
+## Report Repository
+
+Each location writes its daily report to a separate repository. Set `$RepoOwner` and `$RepoName` in both scripts; `$Branch` is only used by `Download-Update.ps1`:
+
+```powershell
+$RepoOwner = "your-github-username"
+$RepoName  = "your-repository-name"
+$Branch    = "main"
+```
 
 ## Location ID
 
@@ -94,5 +94,5 @@ $GitHubToken = $env:GITHUB_TOKEN
 
 Do not write the token directly inside the script.
 
-Both `Download-Update.ps1` and `Generate-DailyReport.ps1` must be configured with the actual report repository owner and name. The placeholder values deliberately stop the script instead of silently failing to report.
+Both scripts must be configured with the actual report repository owner and name, and `Download-Update.ps1` with the actual `$DownloadUrl`. The example values deliberately stop the scripts instead of letting them fail later.
 

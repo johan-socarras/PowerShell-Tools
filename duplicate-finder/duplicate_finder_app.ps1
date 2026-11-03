@@ -8,8 +8,6 @@
 
 Add-Type -AssemblyName System.Web
 
-$ExcludeDirNames = @('node_modules', '.git', '__pycache__', 'venv', '.venv')
-
 # ---------- Shared helpers (main thread) ----------
 
 function Get-Presets {
@@ -299,134 +297,6 @@ $ScanWorkerScript = {
     }
 }
 
-# ---------- Background worker: search one specific file/folder elsewhere ----------
-
-$SearchWorkerScript = {
-    param($TargetPath, $ScopeFolders, $State)
-
-    $ExcludeDirNames = @('node_modules', '.git', '__pycache__', 'venv', '.venv')
-    $FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000
-    $FILE_ATTRIBUTE_OFFLINE = 0x00001000
-    $ignoreCase = [System.StringComparer]::OrdinalIgnoreCase
-
-    function Test-IsCloudOnly {
-        param($Attributes)
-        $raw = [int]$Attributes
-        return (($raw -band $FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) -ne 0) -or (($raw -band $FILE_ATTRIBUTE_OFFLINE) -ne 0)
-    }
-
-    function Invoke-Walk {
-        param([string]$RootPath, $AllFiles)
-        $stack = New-Object System.Collections.Generic.Stack[string]
-        $stack.Push($RootPath)
-        while ($stack.Count -gt 0) {
-            $current = $stack.Pop()
-            try { $dirs = [System.IO.Directory]::GetDirectories($current) } catch { $dirs = @() }
-            foreach ($d in $dirs) {
-                $name = Split-Path $d -Leaf
-                if ($ExcludeDirNames -notcontains $name) { $stack.Push($d) }
-            }
-            try { $files = [System.IO.Directory]::GetFiles($current) } catch { $files = @() }
-            foreach ($f in $files) { $AllFiles.Add($f) }
-        }
-    }
-
-    function Get-Md5Hash {
-        param([string]$Path)
-        try {
-            $md5 = [System.Security.Cryptography.MD5]::Create()
-            try {
-                $stream = [System.IO.File]::OpenRead($Path)
-                try { $bytes = $md5.ComputeHash($stream) } finally { $stream.Dispose() }
-            } finally { $md5.Dispose() }
-            return [System.BitConverter]::ToString($bytes).Replace('-', '')
-        } catch {
-            return $null
-        }
-    }
-
-    try {
-        $State.Phase = 'hashing-target'
-        $isFolder = Test-Path -LiteralPath $TargetPath -PathType Container
-        $targetFiles = New-Object System.Collections.Generic.List[string]
-        if ($isFolder) {
-            Invoke-Walk -RootPath $TargetPath -AllFiles $targetFiles
-        } else {
-            $targetFiles.Add($TargetPath)
-        }
-        $State.TargetFileCount = $targetFiles.Count
-
-        # hash -> list of relative labels (in case of internal dupes within the target itself)
-        $targetHashes = @{}
-        $targetPrefix = $TargetPath.TrimEnd('\') + '\'
-        foreach ($f in $targetFiles) {
-            try { $item = Get-Item -LiteralPath $f -ErrorAction Stop } catch { continue }
-            if (Test-IsCloudOnly -Attributes $item.Attributes) { continue }
-            $hash = Get-Md5Hash -Path $f
-            if (-not $hash) { continue }
-            $relLabel = if ($isFolder -and $f.StartsWith($targetPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $f.Substring($targetPrefix.Length)
-            } else {
-                Split-Path $f -Leaf
-            }
-            if (-not $targetHashes.ContainsKey($hash)) {
-                $targetHashes[$hash] = [pscustomobject]@{ label = $relLabel; size = $item.Length; matches = New-Object System.Collections.Generic.List[string] }
-            }
-        }
-
-        $State.Phase = 'scanning-scope'
-        $scopeFiles = New-Object System.Collections.Generic.List[string]
-        foreach ($folder in $ScopeFolders) {
-            if (Test-Path -LiteralPath $folder) { Invoke-Walk -RootPath $folder -AllFiles $scopeFiles }
-        }
-        $State.ScopeFileCount = $scopeFiles.Count
-
-        $scanned = 0
-        foreach ($f in $scopeFiles) {
-            $scanned++
-            $State.ScannedCount = $scanned
-            if ($f.StartsWith($targetPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or ($f -ieq $TargetPath)) { continue }
-            try { $item = Get-Item -LiteralPath $f -ErrorAction Stop } catch { continue }
-            if (Test-IsCloudOnly -Attributes $item.Attributes) { continue }
-
-            foreach ($kv in $targetHashes.GetEnumerator()) {
-                if ($kv.Value.size -ne $item.Length) { continue }
-            }
-            $sizeMatches = @($targetHashes.GetEnumerator() | Where-Object { $_.Value.size -eq $item.Length })
-            if ($sizeMatches.Count -eq 0) { continue }
-
-            $hash = Get-Md5Hash -Path $f
-            if (-not $hash) { continue }
-            if ($targetHashes.ContainsKey($hash)) {
-                $targetHashes[$hash].matches.Add($f)
-            }
-        }
-
-        $items = New-Object System.Collections.Generic.List[object]
-        foreach ($kv in $targetHashes.GetEnumerator()) {
-            if ($kv.Value.matches.Count -gt 0) {
-                $items.Add([pscustomobject]@{
-                    targetLabel = $kv.Value.label
-                    size        = $kv.Value.size
-                    matches     = $kv.Value.matches.ToArray()
-                })
-            }
-        }
-
-        $State.Result = [pscustomobject]@{
-            targetPath = $TargetPath
-            isFolder   = $isFolder
-            items      = $items.ToArray()
-            totalMatches = ($items | Measure-Object).Count
-        }
-        $State.Phase = 'done'
-        $State.Status = 'done'
-    } catch {
-        $State.Status = 'error'
-        $State.Error = "$($_.Exception.Message) @ line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())"
-    }
-}
-
 # ---------- HTTP plumbing ----------
 
 function Write-JsonResponse {
@@ -638,10 +508,22 @@ $Html = @'
   <button class="danger" id="deleteBtn" disabled>Delete selected (0)</button>
 </footer>
 <script>
+const SESSION_TOKEN = '__SESSION_TOKEN__';
 let currentData = [];
 let selected = new Set();
 let scanTargets = new Set();
 let activeJobId = null;
+
+// Every API call carries the session token; the server rejects calls without it.
+function api(url, options = {}) {
+  options.headers = Object.assign({}, options.headers, { 'X-Session-Token': SESSION_TOKEN });
+  return fetch(url, options);
+}
+
+// Paths and file names are shown as text, never as HTML.
+function esc(value) {
+  return String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 function fmtBytes(b) {
   const units = ['B','KB','MB','GB','TB'];
@@ -658,12 +540,13 @@ function showView(id) {
 // ---------- Presets ----------
 
 async function loadPresets() {
-  const res = await fetch('/api/presets');
+  const res = await api('/api/presets');
   const presets = await res.json();
   const container = document.getElementById('presetList');
   container.innerHTML = presets.map(p => `
-    <label class="preset"><input type="checkbox" data-path="${encodeURIComponent(p.path)}" onchange="onPresetToggle(this)"> ${p.label} <span style="color:var(--muted);font-size:11px;">${p.path}</span></label>
+    <label class="preset"><input type="checkbox" data-path="${encodeURIComponent(p.path)}"> ${esc(p.label)} <span style="color:var(--muted);font-size:11px;">${esc(p.path)}</span></label>
   `).join('');
+  container.querySelectorAll('input[type=checkbox]').forEach(cb => cb.addEventListener('change', () => onPresetToggle(cb)));
 }
 
 function setTheme(theme) {
@@ -688,8 +571,9 @@ function onPresetToggle(cb) {
 function renderChips() {
   const container = document.getElementById('scanChips');
   container.innerHTML = Array.from(scanTargets).map(p => `
-    <span class="chip">${p} <button onclick="removeTarget('${encodeURIComponent(p)}')">&times;</button></span>
+    <span class="chip">${esc(p)} <button type="button" data-path="${encodeURIComponent(p)}">&times;</button></span>
   `).join('');
+  container.querySelectorAll('button[data-path]').forEach(btn => btn.addEventListener('click', () => removeTarget(btn.getAttribute('data-path'))));
   document.getElementById('startScanBtn').disabled = scanTargets.size === 0;
 }
 
@@ -714,22 +598,22 @@ function makeBrowser(containerId, opts) {
     currentPath = path;
     selectedPath = path;
     const filesParam = opts.includeFiles ? '&files=1' : '';
-    const res = await fetch('/api/browse?path=' + encodeURIComponent(path || '') + filesParam);
+    const res = await api('/api/browse?path=' + encodeURIComponent(path || '') + filesParam);
     const data = await res.json();
     container.innerHTML = `
       <div class="browser">
         <div class="path-bar">
-          <input type="text" value="${data.path || ''}" placeholder="Paste or type a folder/file path, then add it" id="${containerId}-input">
+          <input type="text" value="${esc(data.path || '')}" placeholder="Paste or type a folder/file path, then add it" id="${containerId}-input">
           <button class="browse-button" id="${containerId}-browse">Browse</button>
           <button class="primary add-path-button" id="${containerId}-add">Add this path</button>
         </div>
-        <div class="browser-selection" id="${containerId}-selection">${selectedPath ? `Selected: ${selectedPath}` : 'Select a drive, folder, or file.'}</div>
+        <div class="browser-selection" id="${containerId}-selection">${selectedPath ? `Selected: ${esc(selectedPath)}` : 'Select a drive, folder, or file.'}</div>
         <div class="entries ${browserOpen ? '' : 'hidden'}" id="${containerId}-entries">
-          ${data.error ? `<div class="note">Can't list this folder: ${data.error}</div>` : ''}
+          ${data.error ? `<div class="note">Can't list this folder: ${esc(data.error)}</div>` : ''}
           ${data.parent ? `<div class="entry-row dir" data-path="${encodeURIComponent(data.parent)}"><span>&#8592;</span><span class="name">Up one level</span></div>` : ''}
-          ${(data.dirs || []).map(d => `<div class="entry-row dir" data-path="${encodeURIComponent(d.path)}"><span>&#128193;</span><span class="name">${d.name}</span></div>`).join('')}
+          ${(data.dirs || []).map(d => `<div class="entry-row dir" data-path="${encodeURIComponent(d.path)}"><span>&#128193;</span><span class="name">${esc(d.name)}</span></div>`).join('')}
           ${opts.includeFiles ? (data.files || []).map(f => `
-            <div class="entry-row file" data-path="${encodeURIComponent(f.path)}"><span>&#128196;</span><span class="name">${f.name}</span></div>`).join('') : ''}
+            <div class="entry-row file" data-path="${encodeURIComponent(f.path)}"><span>&#128196;</span><span class="name">${esc(f.name)}</span></div>`).join('') : ''}
         </div>
       </div>
     `;
@@ -773,10 +657,10 @@ makeBrowser('scanBrowser', {
   onAddPath: (path) => { scanTargets.add(path); renderChips(); }
 });
 
-// ---------- Start scan / find ----------
+// ---------- Start scan ----------
 
 document.getElementById('startScanBtn').addEventListener('click', async () => {
-  const res = await fetch('/api/scan/start', {
+  const res = await api('/api/scan/start', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ folders: Array.from(scanTargets) })
   });
@@ -787,7 +671,7 @@ document.getElementById('startScanBtn').addEventListener('click', async () => {
 });
 
 async function pollProgress() {
-  const res = await fetch('/api/job/progress?id=' + encodeURIComponent(activeJobId));
+  const res = await api('/api/job/progress?id=' + encodeURIComponent(activeJobId));
   const s = await res.json();
 
   const phaseLabel = { walking: 'Scanning folders...', 'reading-sizes': 'Reading file sizes...', hashing: 'Comparing file contents...', 'folder-matching': 'Looking for duplicated folders...', done: 'Done' }[s.phase] || s.phase;
@@ -810,7 +694,7 @@ async function pollProgress() {
 
 document.getElementById('backBtn').addEventListener('click', () => { showView('view-setup'); selected.clear(); updateFooter(); });
 
-// ---------- Results (shared renderer for scan + find) ----------
+// ---------- Results ----------
 
 function showScanResults(result) {
   currentData = (result.items || []).map(it => ({ type: it.type, size: it.size, wasted: it.wasted, paths: it.paths }));
@@ -819,7 +703,6 @@ function showScanResults(result) {
     <div class="stat"><div class="num">${result.folderCount || 0}</div><div class="label">Duplicate folder sets</div></div>
     <div class="stat"><div class="num">${result.fileCount || 0}</div><div class="label">Duplicate file sets</div></div>
   `;
-  document.getElementById('typeFilter').style.display = '';
   selected.clear();
   showView('view-results');
   render();
@@ -858,22 +741,24 @@ function render() {
     div.innerHTML = `
       <div class="group-head">
         <span class="chevron">&#9656;</span>
-        <span class="badge ${badgeClass}">${d.type}</span>
+        <span class="badge ${badgeClass}">${esc(d.type)}</span>
         <span class="wasted">${fmtBytes(d.wasted)} wasted</span>
         <span class="copies">${d.paths.length} location(s)</span>
-        <span class="first-path">${d.paths[0]}</span>
+        <span class="first-path">${esc(d.paths[0])}</span>
       </div>
       <div class="paths">
-        ${d.paths.map((p, i) => `
+        ${d.paths.map(p => `
           <div class="path-row" data-path="${encodeURIComponent(p)}">
-            <input type="checkbox" data-path="${encodeURIComponent(p)}" onclick="toggleSelect(this)">
-            <span class="p">${p}</span>
-            <button onclick="revealPath(event, '${encodeURIComponent(p)}')">Show in Explorer</button>
+            <input type="checkbox" data-path="${encodeURIComponent(p)}">
+            <span class="p">${esc(p)}</span>
+            <button type="button" class="reveal" data-path="${encodeURIComponent(p)}">Show in Explorer</button>
           </div>
         `).join('')}
       </div>
     `;
     div.querySelector('.group-head').addEventListener('click', () => div.classList.toggle('open'));
+    div.querySelectorAll('.paths input[type=checkbox]').forEach(cb => cb.addEventListener('click', () => toggleSelect(cb)));
+    div.querySelectorAll('button.reveal').forEach(btn => btn.addEventListener('click', ev => revealPath(ev, btn.getAttribute('data-path'))));
     list.appendChild(div);
   });
 }
@@ -897,7 +782,7 @@ function revealPath(ev, encPath) {
   const path = decodeURIComponent(encPath);
   const btn = ev.target;
   const old = btn.textContent;
-  fetch('/api/reveal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path }) })
+  api('/api/reveal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ path }) })
     .then(r => r.json())
     .then(data => {
       if (!data.ok) {
@@ -922,7 +807,7 @@ document.getElementById('deleteBtn').addEventListener('click', async () => {
   if (paths.length === 0) return;
   if (!confirm(`Move ${paths.length} item(s) to the Recycle Bin?\n\nThis can be undone from the Recycle Bin, but review the list before continuing.`)) return;
 
-  const res = await fetch('/api/delete', {
+  const res = await api('/api/delete', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ paths })
   });
@@ -955,6 +840,22 @@ loadPresets();
 </body>
 </html>
 '@
+
+# ---------- Session token ----------
+# Only the page served by this script knows this value. Requests without it, or from another
+# site, are rejected, so no other web page can drive the API (for example, /api/delete).
+$tokenBytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $rng.GetBytes($tokenBytes) } finally { $rng.Dispose() }
+$SessionToken = -join ($tokenBytes | ForEach-Object { $_.ToString('x2') })
+$PageHtml = $Html.Replace('__SESSION_TOKEN__', $SessionToken)
+
+function Test-ApiRequest {
+    param($Request, [int]$Port)
+    $origin = $Request.Headers['Origin']
+    if ($origin -and $origin -ne "http://localhost:$Port") { return $false }
+    return $Request.Headers['X-Session-Token'] -ceq $SessionToken
+}
 
 # ---------- Server loop ----------
 
@@ -990,8 +891,11 @@ while ($listener.IsListening) {
         $path = $request.Url.AbsolutePath
         $method = $request.HttpMethod
 
-        if ($method -eq 'GET' -and $path -eq '/') {
-            Write-HtmlResponse -Response $response -Html $Html
+        if ($path.StartsWith('/api/') -and -not (Test-ApiRequest -Request $request -Port $port)) {
+            Write-JsonResponse -Response $response -Data @{ error = 'forbidden' } -StatusCode 403
+        }
+        elseif ($method -eq 'GET' -and $path -eq '/') {
+            Write-HtmlResponse -Response $response -Html $PageHtml
         }
         elseif ($method -eq 'GET' -and $path -eq '/api/presets') {
             Write-JsonResponse -Response $response -Data (Get-Presets)
@@ -1017,7 +921,6 @@ while ($listener.IsListening) {
                     status = $state.Status; phase = $state.Phase; error = $state.Error
                     filesFound = $state.FilesFound; filesRead = $state.FilesRead
                     hashTotal = $state.HashTotal; hashed = $state.Hashed
-                    targetFileCount = $state.TargetFileCount; scopeFileCount = $state.ScopeFileCount; scannedCount = $state.ScannedCount
                     result = $state.Result
                 }
                 Write-JsonResponse -Response $response -Data $data

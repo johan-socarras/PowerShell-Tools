@@ -2,13 +2,17 @@
 
 [![PowerShell checks](https://github.com/johan-socarras/PowerShell-Tools/actions/workflows/powershell-checks.yml/badge.svg)](https://github.com/johan-socarras/PowerShell-Tools/actions/workflows/powershell-checks.yml)
 
-PowerShell tools for IT support and Windows administration. Each tool has its own README with what it does and how to run it, and runs on Windows with no installs or external dependencies.
+PowerShell tools for IT support and Windows administration. Each tool has its own README with what it does, what it needs and how to run it.
 
 ## Tools
 
 ### [duplicate-finder](duplicate-finder)
 
 A local web app for finding and safely removing duplicate files and folders on Windows. It finds files with identical content and whole duplicate folders, runs as a small local web server with a browser UI, and only deletes through the Recycle Bin after explicit confirmation.
+
+### [ad-user-lifecycle](ad-user-lifecycle)
+
+Onboards and offboards Active Directory users from CSV files: accounts in the right OU and group with a temporary password, and leavers disabled, removed from their groups and moved aside. Includes a dry run (`-WhatIf`) and a report of every change. Tested on a Windows Server 2025 domain controller in my home lab.
 
 ### [github-file-distribution-docs](github-file-distribution-docs)
 
@@ -17,6 +21,7 @@ A system for distributing one update file from GitHub to many remote locations. 
 ## Skills Demonstrated
 
 - PowerShell scripting and automation
+- Active Directory user lifecycle with the ActiveDirectory module, with `-WhatIf` support
 - REST APIs (GitHub Contents API) and a local HTTP server
 - File integrity checks (SHA-256) and atomic file replacement
 - Unattended runs, safe for Windows Task Scheduler

@@ -14,6 +14,10 @@ A local web app for finding and safely removing duplicate files and folders on W
 
 Onboards and offboards Active Directory users from CSV files: accounts in the right OU and group with a temporary password, and leavers disabled, removed from their groups and moved aside. Includes a dry run (`-WhatIf`) and a report of every change. Tested on a Windows Server 2025 domain controller in my home lab.
 
+### [network-inventory](network-inventory)
+
+Finds every device on a subnet and reports its IP address, host name, MAC address, vendor and open ports as CSV or an HTML report. Fast parallel discovery that also catches devices that block ping, vendor lookup against the IEEE list, and nothing changed on the network.
+
 ### [github-file-distribution-docs](github-file-distribution-docs)
 
 A system for distributing one update file from GitHub to many remote locations. Each location downloads the file, verifies it against a published SHA-256 checksum, replaces its local copy atomically, and reports its status to a separate GitHub repository. A second script lets an administrator confirm which locations completed the update.
@@ -22,6 +26,7 @@ A system for distributing one update file from GitHub to many remote locations. 
 
 - PowerShell scripting and automation
 - Active Directory user lifecycle with the ActiveDirectory module, with `-WhatIf` support
+- Network discovery: ping sweep, ARP table, MAC vendor lookup and TCP port checks
 - REST APIs (GitHub Contents API) and a local HTTP server
 - File integrity checks (SHA-256) and atomic file replacement
 - Unattended runs, safe for Windows Task Scheduler

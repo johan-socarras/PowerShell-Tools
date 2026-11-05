@@ -68,4 +68,5 @@ The objects are also written to the pipeline, so the results can be filtered on 
 
 ## Tested on
 
-Windows 11 Pro on a /24 home network with about 25 devices, in both Windows PowerShell 5.1 and PowerShell 7.6: discovery including devices that only answer ARP, vendors, randomized MAC addresses, open ports, CSV and HTML reports, a subnet the computer is not on, and the input checks (subnet too large, invalid subnet, missing output folder).
+- The isolated lab network of my home lab ([Proxmox-Homelab](https://github.com/johan-socarras/Proxmox-Homelab)), from a Windows Server 2025 domain controller in Windows PowerShell 5.1: vendor list download, the firewall appliance and a Windows 11 workstation found through ARP although both block ping, open ports, CSV and HTML reports, and a subnet the server is not on.
+- Windows 11 Pro on a /24 home network with about 25 devices, in both Windows PowerShell 5.1 and PowerShell 7.6: discovery including devices that only answer ARP, vendors, randomized MAC addresses, open ports, CSV and HTML reports, a subnet the computer is not on, and the input checks (subnet too large, invalid subnet, missing output folder).

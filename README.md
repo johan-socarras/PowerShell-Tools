@@ -18,6 +18,10 @@ Onboards and offboards Active Directory users from CSV files: accounts in the ri
 
 Finds every device on a subnet and reports its IP address, host name, MAC address, vendor and open ports as CSV or an HTML report. Fast parallel discovery that also catches devices that block ping, vendor lookup against the IEEE list, and nothing changed on the network.
 
+### [computer-health](computer-health)
+
+Checks a list of Windows computers for low disk space, long uptime, pending restarts and services that should be running, and writes an HTML report with the ones that need attention first. Connects over CIM (WinRM or DCOM) with nothing to install, and exits with an error code for scheduled alerts.
+
 ### [github-file-distribution-docs](github-file-distribution-docs)
 
 A system for distributing one update file from GitHub to many remote locations. Each location downloads the file, verifies it against a published SHA-256 checksum, replaces its local copy atomically, and reports its status to a separate GitHub repository. A second script lets an administrator confirm which locations completed the update.
@@ -27,6 +31,7 @@ A system for distributing one update file from GitHub to many remote locations. 
 - PowerShell scripting and automation
 - Active Directory user lifecycle with the ActiveDirectory module, with `-WhatIf` support
 - Network discovery: ping sweep, ARP table, MAC vendor lookup and TCP port checks
+- Remote health checks over CIM (WinRM and DCOM), including registry reads with StdRegProv
 - REST APIs (GitHub Contents API) and a local HTTP server
 - File integrity checks (SHA-256) and atomic file replacement
 - Unattended runs, safe for Windows Task Scheduler

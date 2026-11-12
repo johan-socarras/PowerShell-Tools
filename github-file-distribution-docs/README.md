@@ -1,3 +1,5 @@
+[← All tools](https://github.com/johan-socarras/PowerShell-Tools#tools)
+
 # GitHub File Distribution and Location Reporting System
 
 ## Overview
@@ -20,6 +22,28 @@ The project also includes a reporting script that helps an administrator confirm
 ## Main Use Case
 
 The system is designed for environments where one central file needs to be distributed to many locations.
+
+```mermaid
+flowchart LR
+    publish(["Administrator<br>publishes"])
+    update[("Update repository<br>public<br>file + .sha256")]
+    subgraph locations ["Remote locations"]
+        site1["SITE-001<br>Download-Update.ps1"]
+        site2["SITE-002<br>Download-Update.ps1"]
+        site3["SITE-003<br>Download-Update.ps1"]
+    end
+    reports[("Report repository<br>Log / date / SITE-00x.txt")]
+    check(["Administrator<br>checks"])
+
+    publish -->|"(1) the file and<br>its checksum"| update
+    update --> site1
+    update -->|"(2) download, verify,<br>replace if different"| site2
+    update --> site3
+    site1 --> reports
+    site2 -->|"(3) daily<br>status report"| reports
+    site3 --> reports
+    reports -->|"(4) Generate-DailyReport.ps1:<br>updated, failed, missing"| check
+```
 
 Example workflow:
 

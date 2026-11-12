@@ -1,3 +1,5 @@
+[← All tools](https://github.com/johan-socarras/PowerShell-Tools#tools)
+
 # Network Inventory
 
 Finds every device on an IPv4 subnet and lists its IP address, host name, MAC address, vendor and open ports, in a CSV file, an HTML report or both. Built in PowerShell with .NET networking classes, no extra modules.

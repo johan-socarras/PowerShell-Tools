@@ -42,7 +42,7 @@ Do not publish:
 
 - passwords
 - tokens
-- private store details
+- private location details
 - customer information
 - internal network paths
 - confidential database content

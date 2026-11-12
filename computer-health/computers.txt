@@ -1,0 +1,4 @@
+# One computer name per line. Lines that start with # are ignored.
+PC-FRONT01
+PC-SALES03
+FS01

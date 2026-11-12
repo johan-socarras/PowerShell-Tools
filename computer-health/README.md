@@ -1,3 +1,5 @@
+[← All tools](https://github.com/johan-socarras/PowerShell-Tools#tools)
+
 # Computer Health
 
 Checks a list of Windows computers for the problems that usually come before a support ticket: a disk running out of space, weeks without a restart, a restart waiting for updates and services that should be running but are not. Writes an HTML report with the computers that need attention first. Built in PowerShell with CIM, no extra modules.
@@ -39,6 +41,8 @@ The report puts Unreachable and Critical computers first. The results also go to
 # Only the computers that need attention
 .\Get-ComputerHealth.ps1 -ComputerListPath .\computers.txt | Where-Object Status -ne 'OK'
 ```
+
+`computers.txt` in this folder is a sample list; replace its names with your own.
 
 `-DiskWarningPercent`, `-DiskCriticalPercent` and `-UptimeWarningDays` change the thresholds, and `-ExcludeService` the services to ignore (pass `@()` to see every stopped automatic service). `Get-Help .\Get-ComputerHealth.ps1 -Full` describes every parameter.
 

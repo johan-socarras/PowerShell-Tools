@@ -1,3 +1,5 @@
+[← All tools](https://github.com/johan-socarras/PowerShell-Tools#tools)
+
 # AD User Lifecycle
 
 Onboards and offboards Active Directory users from CSV files, with a dry run (`-WhatIf`) and a report of every change. Built in PowerShell with the `ActiveDirectory` module.
@@ -36,6 +38,8 @@ New-ADOrganizationalUnit -Name 'Disabled Users' -Path 'OU=Lab,DC=ad,DC=lab'
 ```
 
 ## CSV files
+
+Both files are in this folder with sample rows; replace them with your own.
 
 `new-hires.csv` (`Title` is optional):
 

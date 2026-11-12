@@ -2,38 +2,30 @@
 
 ## File Distribution Workflow
 
-```text
-Administrator
-    |
-    | Publishes the file and its checksum
-    v
-Update repository (public)
-    |
-    | Remote locations download file
-    v
-Remote Location Script
-    |
-    | Verifies the checksum, compares local and remote file
-    v
-Local File Updated
-    |
-    | Sends status report
-    v
-Report repository (daily logs)
+```mermaid
+flowchart LR
+    admin(["Administrator"])
+    update[("Update repository<br>public")]
+    script["Remote location script<br>Download-Update.ps1"]
+    local["Local file<br>updated"]
+    reports[("Report repository<br>daily logs")]
+
+    admin -->|"Publishes the file<br>and its checksum"| update
+    update -->|"Remote locations<br>download the file"| script
+    script -->|"Verifies the checksum,<br>compares local<br>and remote file"| local
+    local -->|"Sends status<br>report"| reports
 ```
 
 ## Daily Reporting Workflow
 
-```text
-Administrator runs Generate-DailyReport.ps1
-    |
-    | Reads expected locations
-    v
-Checks the day's log folder in the report repository
-    |
-    | Compares expected vs reported
-    v
-Displays missing locations
+```mermaid
+flowchart LR
+    run(["Administrator runs<br>Generate-DailyReport.ps1"])
+    check["Checks the day's log folder<br>in the report repository"]
+    show["Displays missing<br>locations"]
+
+    run -->|"Reads expected<br>locations"| check
+    check -->|"Compares expected<br>vs reported"| show
 ```
 
 ## Example Daily Process

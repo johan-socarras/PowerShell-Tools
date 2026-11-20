@@ -15,6 +15,7 @@
 | --- | --- | :---: | :---: | --- |
 | [AD User Lifecycle](ad-user-lifecycle) | Onboards and offboards Active Directory users from CSV files | Yes | Not tested | Windows Server 2025 domain controller in my home lab |
 | [Computer Health](computer-health) | Reports low disk space, long uptime, pending restarts and stopped services on a list of computers | Yes | Yes | Home lab domain and Windows 11 Pro |
+| [PC Maintenance](pc-maintenance) | Finds out why a PC is slow or unstable and runs the usual cleanup and repairs, from a window or the command line | Yes | Yes | Windows 11 Pro |
 | [Network Inventory](network-inventory) | Lists every device on a subnet with its vendor and open ports | Yes | Yes | Home lab network and a home network of about 25 devices |
 | [GitHub File Distribution](github-file-distribution-docs) | Distributes one update file to many locations and reports who has it | Yes | Yes | End to end against a local stand-in for the GitHub API |
 | [Duplicate Finder](duplicate-finder) | Finds duplicate files and folders and removes them through the Recycle Bin | Yes | Yes | Windows 11 |
@@ -41,6 +42,14 @@ Checks a list of Windows computers for low disk space, long uptime, pending rest
 
 [![Computer Health HTML report with sample data: one unreachable computer, one critical and two warnings listed before the healthy ones](computer-health/screenshot.png)](computer-health)
 
+### [PC Maintenance](pc-maintenance)
+
+Finds out why one Windows PC is slow or unstable: disk health and errors, memory, processor, startup programs, blue screens and crashes, Windows Update, security software, battery and network, each with what to do. Then runs the usual cleanup and repair steps (temporary files, Recycle Bin, Windows Update cache, DISM and SFC, memory test) with a dry run, and writes an HTML report for the ticket. A window for the technician, or the command line.
+
+<p align="center">
+  <a href="pc-maintenance"><img src="pc-maintenance/screenshot.png" width="640" alt="PC Maintenance window after a check with sample data: one critical disk finding and five warnings at the top of the results"></a>
+</p>
+
 ### [Network Inventory](network-inventory)
 
 Finds every device on a subnet and reports its IP address, host name, MAC address, vendor and open ports as CSV or an HTML report. Fast parallel discovery that also catches devices that block ping, vendor lookup against the IEEE list, and nothing changed on the network.
@@ -65,6 +74,8 @@ A local web app for finding and safely removing duplicate files and folders on W
 - Active Directory user lifecycle with the ActiveDirectory module, with `-WhatIf` support
 - Network discovery: ping sweep, ARP table, MAC vendor lookup and TCP port checks
 - Remote health checks over CIM (WinRM and DCOM), including registry reads with StdRegProv
+- Windows troubleshooting: event logs, storage reliability counters, Windows Update history, DISM and SFC
+- Windows Forms tools that run their work in a separate, elevated process (UAC)
 - REST APIs (GitHub Contents API) and a local HTTP server
 - File integrity checks (SHA-256) and atomic file replacement
 - Unattended runs, safe for Windows Task Scheduler

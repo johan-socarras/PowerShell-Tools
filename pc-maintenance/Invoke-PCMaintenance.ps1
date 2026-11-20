@@ -120,7 +120,7 @@ $script:TaskCatalog = @(
     [pscustomobject]@{ Name = 'DnsCache'; NeedsAdmin = $false; Changes = $false; Title = 'Clear the DNS cache'; Detail = 'Fixes names that still resolve to an old address.' }
     [pscustomobject]@{ Name = 'ComponentCleanup'; NeedsAdmin = $true; Changes = $true; Title = 'Remove old Windows components'; Detail = 'DISM /StartComponentCleanup. Frees space in the component store; a few minutes.' }
     [pscustomobject]@{ Name = 'OptimizeDrive'; NeedsAdmin = $true; Changes = $true; Title = 'Optimize the system drive'; Detail = 'TRIM on an SSD, defragmentation on a hard disk. Windows also does this every week.' }
-    [pscustomobject]@{ Name = 'RepairWindows'; NeedsAdmin = $true; Changes = $true; Title = 'Repair Windows files'; Detail = 'DISM /RestoreHealth, then SFC /scannow. 20 to 60 minutes.' }
+    [pscustomobject]@{ Name = 'RepairWindows'; NeedsAdmin = $true; Changes = $true; Title = 'Repair Windows files'; Detail = 'DISM /RestoreHealth, then SFC /scannow. 30 minutes to 2 hours.' }
     [pscustomobject]@{ Name = 'MemoryTest'; NeedsAdmin = $false; Changes = $false; Title = 'Test the memory at the next restart'; Detail = 'Opens Windows Memory Diagnostic; the PC restarts to run the test (about 15 minutes).' }
 )
 
@@ -1037,7 +1037,10 @@ function Invoke-RepairWindowsTask {
         }
     }
     $files = Invoke-NativeTool -FilePath $sfc -ArgumentList '/scannow'
-    $result = @($files.Lines | Select-Object -Last 2) -join ' '
+    # SFC opens with two "Beginning..." lines in every language; the verdict comes after them.
+    $verdict = @($files.Lines | Select-Object -Skip 2)
+    if ($verdict.Count -eq 0) { $verdict = @($files.Lines) }
+    $result = @($verdict | Select-Object -Last 2) -join ' '
     if ($files.ExitCode -ne 0) { $status = 'Attention' }
     $details.Add("SFC /scannow (code $($files.ExitCode)): $result")
     if (@(Get-PendingRestartReason).Count -gt 0) { $details.Add('Restart the PC to finish the repair.') }

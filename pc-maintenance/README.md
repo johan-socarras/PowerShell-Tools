@@ -39,7 +39,7 @@ Some findings suggest tasks: low disk space suggests the cleanups, blue screens 
 | `DnsCache` | Clears the DNS client cache. | No |
 | `ComponentCleanup` | Removes superseded Windows components (`DISM /StartComponentCleanup`). | Yes |
 | `OptimizeDrive` | Optimizes the system drive: TRIM on an SSD, defragmentation on a hard disk. | Yes |
-| `RepairWindows` | Repairs the Windows image with `DISM /RestoreHealth`, then system files with `SFC /scannow`, in that order. If DISM finds no repair source, as on PCs that update from WSUS, it says how to use a Windows ISO instead. Expect 30 minutes to two hours, most of it SFC: the other tasks together take a few minutes. | Yes |
+| `RepairWindows` | Repairs the Windows image with `DISM /RestoreHealth`, then system files with `SFC /scannow`, in that order. If DISM finds no repair source, as on PCs that update from WSUS, it says how to use a Windows ISO instead. Expect 30 minutes to two hours, most of it SFC: the other tasks together take a few minutes. The log shows their progress every 10%. | Yes |
 | `MemoryTest` | Opens Windows Memory Diagnostic, where you choose to restart now or at the next start. The next check shows the result. | No |
 
 Tasks always run in this order. Deletions skip files in use and never follow a junction or symbolic link out of the folder being cleaned. With **Dry run** (`-DryRun`) every task says what it would do, and how much it would free, and nothing is changed. Without it, the window asks for confirmation before any task that changes the PC.

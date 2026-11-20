@@ -212,17 +212,29 @@ function Get-SystemToolPath {
 }
 
 function Invoke-NativeTool {
-    # Runs a command-line tool and logs its output without the progress lines.
+    # Runs a command-line tool and logs its output. Progress lines are not kept: the log gets one
+    # line every 10%, so a long DISM or SFC run shows it is still moving.
     param([string]$FilePath, [string[]]$ArgumentList)
     Write-MaintenanceLog -Message "Running $(Split-Path -Leaf $FilePath) $($ArgumentList -join ' ')"
     $lines = New-Object System.Collections.Generic.List[string]
+    $logged = 0
     & $FilePath @ArgumentList 2>&1 | ForEach-Object {
         # SFC writes UTF-16, which arrives with a NUL between letters.
         $text = ("$_" -replace "`0", '').Trim()
-        if ($text -and $text -notmatch '\d+([.,]\d+)?\s?%') {
-            $lines.Add($text)
-            Write-MaintenanceLog -Message "  $text"
+        if (-not $text) { return }
+        $progress = [regex]::Match($text, '(\d+)(?:[.,]\d+)?\s?%')
+        if ($progress.Success) {
+            $step = [math]::Floor([int]$progress.Groups[1].Value / 10) * 10
+            # A tool with several phases starts again from 0.
+            if ($step -lt $logged) { $logged = 0 }
+            if ($step -gt $logged) {
+                $logged = $step
+                Write-MaintenanceLog -Message "  $step%"
+            }
+            return
         }
+        $lines.Add($text)
+        Write-MaintenanceLog -Message "  $text"
     }
     return [pscustomobject]@{ ExitCode = $LASTEXITCODE; Lines = $lines.ToArray() }
 }
@@ -1036,6 +1048,7 @@ function Invoke-RepairWindowsTask {
             $details.Add('DISM found no repair source. On PCs that update from WSUS, mount a Windows ISO of the same version and run: DISM /Online /Cleanup-Image /RestoreHealth /Source:wim:X:\sources\install.wim:1 /LimitAccess')
         }
     }
+    Write-MaintenanceLog -Message 'SFC can wait half an hour for Windows before its first line, and then take an hour or more.'
     $files = Invoke-NativeTool -FilePath $sfc -ArgumentList '/scannow'
     # SFC opens with two "Beginning..." lines in every language; the verdict comes after them.
     $verdict = @($files.Lines | Select-Object -Skip 2)

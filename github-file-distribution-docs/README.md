@@ -187,6 +187,23 @@ To check a previous day instead of today:
 .\scripts\Generate-DailyReport.ps1 -ReportDate "2026-06-30"
 ```
 
+## Sample output
+
+The daily report for five locations (sample data): three updated, one sent nothing and one reported a failed checksum. The script exits with code 1, so a scheduled run can raise an alert.
+
+```text
+Daily report: 2026-06-30
+Successful locations: 3/5
+
+NO REPORT RECEIVED:
+ - SITE-004
+
+REPORTED FAILURE:
+ - SITE-005: Checksum Validation Failed [2026-06-30T06:04:27.0000000-05:00]
+
+Do not remove the update file until all locations report a successful status.
+```
+
 ## Recommended Improvements
 
 Future improvements could include:

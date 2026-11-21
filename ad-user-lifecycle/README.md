@@ -71,6 +71,26 @@ cmorgan,Left the company
 
 `Get-Help .\Invoke-ADUserLifecycle.ps1 -Full` describes every parameter.
 
+## Sample output
+
+Each run writes a CSV report. These are from the lab domain, with test users. A dry run of onboarding, with a fourth row whose department has no OU or group:
+
+```text
+"Time","Action","Identity","Name","Result","Detail"
+"2026-11-03T09:04:16","Onboard","jrivers","Jordan Rivers","Planned","Would be created in OU=IT,OU=Users,OU=Lab,DC=ad,DC=lab and added to GG-IT."
+"2026-11-03T09:04:16","Onboard","cmorgan","Casey Morgan","Planned","Would be created in OU=Sales,OU=Users,OU=Lab,DC=ad,DC=lab and added to GG-Sales."
+"2026-11-03T09:04:16","Onboard","rparker","Riley Parker","Planned","Would be created in OU=HR,OU=Users,OU=Lab,DC=ad,DC=lab and added to GG-HR."
+"2026-11-03T09:04:16","Onboard","T9004","Avery Brooks","Skipped","Unknown department 'Finance': OU=Finance,OU=Users,OU=Lab,DC=ad,DC=lab or the group GG-Finance does not exist."
+```
+
+Offboarding one account and a name that does not exist:
+
+```text
+"Time","Action","Identity","Name","Result","Detail"
+"2026-11-03T09:04:18","Offboard","cmorgan","Casey Morgan","Offboarded","Disabled and moved to OU=Disabled Users,OU=Lab,DC=ad,DC=lab; groups removed: GG-Sales."
+"2026-11-03T09:04:18","Offboard","nobody9999","","Skipped","No account with this name."
+```
+
 ## Safety notes
 
 - The temporary password is typed once at a hidden prompt, or passed as a `SecureString`, and is never written to disk or to the report.

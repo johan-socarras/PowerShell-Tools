@@ -1,10 +1,30 @@
-# Duplicate Finder -- local web app.
-# Starts a tiny local server (no internet, no external dependencies) and opens a page in your
-# browser where you choose folders or individual files to scan, and delete selected duplicates
-# (moved to the Recycle Bin, never permanent).
-#
-# Keep this PowerShell window open while using the page -- it's the engine behind it.
-# Close the window (or press Ctrl+C) to stop the server.
+<#
+.SYNOPSIS
+Finds duplicate files and whole duplicate folders and moves the copies you choose to the Recycle Bin.
+
+.DESCRIPTION
+Starts a small web server on this computer (http://localhost:8791/, no internet and nothing to install)
+and opens its page in the default browser. On the page you choose preset folders, or browse to any
+folder, drive or file, and scan them. Files with the same size and MD5 hash are grouped as duplicates,
+and a copy of an entire folder tree is reported as one duplicate folder.
+
+Only the copies you check are deleted, after a confirmation, and always to the Recycle Bin. At least one
+copy of each set must stay unchecked. OneDrive cloud-only files are skipped and never downloaded.
+
+Keep this PowerShell window open while you use the page: it is the engine behind it. Close the window,
+or press Ctrl+C, to stop the server.
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File .\duplicate_finder_app.ps1
+
+Starts the server and opens the page in the default browser.
+
+.NOTES
+Tested on Windows 11 with Windows PowerShell 5.1 and PowerShell 7. No administrator rights needed.
+
+.LINK
+https://github.com/johan-socarras/PowerShell-Tools/tree/main/duplicate-finder
+#>
 
 Add-Type -AssemblyName System.Web
 

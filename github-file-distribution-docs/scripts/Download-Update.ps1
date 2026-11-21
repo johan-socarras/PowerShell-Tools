@@ -1,3 +1,40 @@
+<#
+.SYNOPSIS
+Downloads the published update file, verifies it against its SHA-256 checksum and replaces the local copy
+only when it changed, then reports the result to GitHub.
+
+.DESCRIPTION
+Runs at each remote location, by hand or from Windows Task Scheduler. It downloads the update file and its
+checksum file (.sha256) from the public update repository, checks the download against the checksum and
+compares it with the local copy. A different, verified file replaces the local one in a single step; an
+identical one is left alone.
+
+Each run writes one status report for this location (SiteID) to the report repository, in
+Log/<date>/<SiteID>.txt: File Updated Successfully, File Already Updated, Download Failed, Remote File
+Missing, Checksum Validation Failed or Local File Update Failed. A report that cannot be sent is kept in
+a local queue and sent on the next run.
+
+Set DownloadUrl, SiteID, RepoOwner and RepoName in the CONFIGURATION section first, and put a token that
+can only write to the report repository in the GITHUB_TOKEN environment variable.
+
+.PARAMETER PauseAtEnd
+Waits for Enter before closing, to read the output when the script is started by double-click. Leave it
+off for Task Scheduler.
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File .\Download-Update.ps1
+
+Checks for a new file, updates it if needed and sends today's report.
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File .\Download-Update.ps1 -PauseAtEnd
+
+The same, waiting for Enter at the end.
+
+.LINK
+https://github.com/johan-socarras/PowerShell-Tools/tree/main/github-file-distribution-docs
+#>
+
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'PauseAtEnd', Justification = 'Read by Write-CompletionPause.')]
 param(
     [switch]$PauseAtEnd

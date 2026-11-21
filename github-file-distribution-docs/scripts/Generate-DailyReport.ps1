@@ -1,3 +1,33 @@
+<#
+.SYNOPSIS
+Shows which locations updated the file on a given day, which reported a failure and which did not report.
+
+.DESCRIPTION
+Reads the day's folder of the report repository (Log/<date>/) through the GitHub API and checks each
+report's SiteID and Status against the master list of expected locations in the CONFIGURATION section.
+A location counts as successful only with File Updated Successfully or File Already Updated.
+
+It exits with code 0 only when every expected location reported success, and with code 1 otherwise, so a
+scheduled run can raise an alert. Set RepoOwner, RepoName and the location list first; GITHUB_TOKEN is
+needed only when the report repository is private.
+
+.PARAMETER ReportDate
+Day to check, as yyyy-MM-dd. Default: today.
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File .\Generate-DailyReport.ps1
+
+Checks today's reports.
+
+.EXAMPLE
+powershell -ExecutionPolicy Bypass -File .\Generate-DailyReport.ps1 -ReportDate 2026-06-30
+
+Checks the reports of 30 June 2026.
+
+.LINK
+https://github.com/johan-socarras/PowerShell-Tools/tree/main/github-file-distribution-docs
+#>
+
 param(
     [string]$ReportDate = (Get-Date -Format 'yyyy-MM-dd')
 )

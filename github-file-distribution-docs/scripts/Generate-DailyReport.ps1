@@ -43,7 +43,8 @@ $headers = Get-GitHubHeader
 $folderUri = "https://api.github.com/repos/$RepoOwner/$RepoName/contents/Log/$ReportDate"
 
 try {
-    $filesInGitHub = @(Invoke-RestMethod -Uri $folderUri -Headers $headers -Method Get -ErrorAction Stop)
+    # Invoke-RestMethod returns a JSON array as one object; ForEach-Object unrolls it so each file is read on its own.
+    $filesInGitHub = @(Invoke-RestMethod -Uri $folderUri -Headers $headers -Method Get -ErrorAction Stop | ForEach-Object { $_ })
 } catch {
     if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 404) {
         $filesInGitHub = @()

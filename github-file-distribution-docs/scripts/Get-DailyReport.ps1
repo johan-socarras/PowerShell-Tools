@@ -29,8 +29,12 @@ https://github.com/johan-socarras/PowerShell-Tools/tree/main/github-file-distrib
 #>
 
 param(
+    [ValidatePattern('^\d{4}-\d{2}-\d{2}$')]
     [string]$ReportDate = (Get-Date -Format 'yyyy-MM-dd')
 )
+
+# Windows PowerShell 5.1 may not offer TLS 1.2 by default, and GitHub requires it.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 # ==========================================
 # CONFIGURATION

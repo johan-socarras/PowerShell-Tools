@@ -60,7 +60,6 @@ $SiteID        = "SITE-001"
 $GitHubToken   = $env:GITHUB_TOKEN
 $RepoOwner     = "your-github-username"
 $RepoName      = "your-repository-name"
-$Branch        = "main"
 
 $PendingQueue  = "$env:ProgramData\FileDistribution\PendingReports.json"
 
@@ -155,7 +154,6 @@ function Send-Report {
         $body = @{
             message = "Daily report from $SiteID for $reportDate"
             content = $base64Content
-            branch = $Branch
         }
         if ($sha) { $body.sha = $sha }
 

@@ -58,7 +58,7 @@ Timestamp: 2026-06-30T17:30:00.0000000-05:00
 
 ## Configuration
 
-Both scripts have a CONFIGURATION section at the top. At each location, `Download-Update.ps1` needs its own `$SiteID`, the `$DownloadUrl` of the update file and the report repository (`$RepoOwner`, `$RepoName`); `Get-DailyReport.ps1` needs the same repository and the list of expected locations. The scripts stop while any of these still has its example value. Every setting, and how to publish the checksum, is in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+Both scripts have a CONFIGURATION section at the top. At each location, `Download-Update.ps1` needs its own `$SiteID`, the `$DownloadUrl` of the update file and the report repository (`$RepoOwner`, `$RepoName`); `Get-DailyReport.ps1` needs the same repository and the list of expected locations. The scripts stop while the download URL or the report repository still has its example value. Every setting, and how to publish the checksum, is in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ## Usage
 

@@ -11,7 +11,7 @@ Every setting is in the CONFIGURATION section at the top of each script. The scr
 | `$FileName` | Name of the local copy. |
 | `$Destination` | Where the local copy is kept. Default: `$env:ProgramData\FileDistribution\<FileName>`. |
 | `$SiteID` | This location's ID, unique per location (`SITE-001`). It names the daily report file. |
-| `$RepoOwner`, `$RepoName`, `$Branch` | The report repository and its branch. |
+| `$RepoOwner`, `$RepoName` | The report repository. Reports go to its default branch, where `Get-DailyReport.ps1` reads them. |
 | `$PendingQueue` | Where reports that could not be sent wait for the next run. Default: `$env:ProgramData\FileDistribution\PendingReports.json`. |
 
 The token is read from the `GITHUB_TOKEN` environment variable. To set it for every new session of the account that runs the script:

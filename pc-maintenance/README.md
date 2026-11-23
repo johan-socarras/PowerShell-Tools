@@ -35,7 +35,7 @@ Some findings suggest tasks: low disk space suggests the cleanups, blue screens 
 | --- | --- | :---: |
 | `TempFiles` | Deletes temporary files unchanged for 7 days or more (`-TempFileAgeDays`). As administrator, for every user profile and `Windows\Temp`; otherwise, for the current user. | No |
 | `RecycleBin` | Empties the Recycle Bin on every fixed drive. As administrator, every user's. | No |
-| `UpdateCache` | Clears downloaded Windows Update files and the Delivery Optimization cache. Stops Windows Update and BITS while it deletes and starts them again; waits if Windows Update is waiting for a restart. | Yes |
+| `UpdateCache` | Clears downloaded Windows Update files and the Delivery Optimization cache. Stops Windows Update and BITS while it deletes and starts them again. Skipped while Windows Update is waiting for a restart. | Yes |
 | `DnsCache` | Clears the DNS client cache. | No |
 | `ComponentCleanup` | Removes superseded Windows components (`DISM /StartComponentCleanup`). | Yes |
 | `OptimizeDrive` | Optimizes the system drive: TRIM on an SSD, defragmentation on a hard disk. | Yes |

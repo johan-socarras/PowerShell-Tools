@@ -74,7 +74,7 @@ A small web server on this computer with a page in the browser. It finds files w
 - Network discovery: ping sweep, ARP table, MAC vendor lookup and TCP port checks
 - Remote health checks over CIM (WinRM and DCOM), including registry reads with StdRegProv
 - Windows troubleshooting: event logs, storage reliability counters, Windows Update history, DISM and SFC
-- Windows Forms tools that run their work in a separate, elevated process (UAC)
+- A Windows Forms window that runs its work in a separate, elevated process (UAC)
 - REST APIs (GitHub Contents API) and a local HTTP server
 - File integrity checks (SHA-256) and atomic file replacement
 - Unattended runs, safe for Windows Task Scheduler

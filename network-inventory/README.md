@@ -39,7 +39,7 @@ It only reads: nothing on the network or on the devices is changed.
 .\Get-NetworkInventory.ps1 -Subnet 192.0.2.0/24 -SkipPortScan
 ```
 
-Subnets from /22 (1,022 addresses) to /32 are accepted; larger ranges are scanned in parts. `Get-Help .\Get-NetworkInventory.ps1 -Full` describes every parameter.
+Subnets from /22 (1,022 addresses) to /32 are accepted; split a larger range and scan it in parts. `Get-Help .\Get-NetworkInventory.ps1 -Full` describes every parameter.
 
 ## Sample output
 
@@ -65,7 +65,7 @@ The objects are also written to the pipeline, so the results can be filtered on 
 ## Notes
 
 - Scan only networks you own or are allowed to scan. Port checks are plain TCP connections, but security tools may still flag them.
-- A device that blocks both ping and ARP, or sleeps, is not found. Run it again at another time of day for a fuller picture.
+- A device that is asleep or off is not found, and one that blocks ping is only found from its own network segment, through ARP. Run it again at another time of day for a fuller picture.
 - Re-run with `-UpdateVendorList` now and then to pick up new vendors.
 
 ## Tested on

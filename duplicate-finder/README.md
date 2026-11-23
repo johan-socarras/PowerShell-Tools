@@ -36,9 +36,10 @@ This opens http://localhost:8791/ in your default browser. Keep the PowerShell w
 
 - Never deletes permanently: everything goes through the Recycle Bin and can be restored.
 - Never opens or downloads OneDrive cloud-only files: they are skipped, and a folder that contains one is never reported as a duplicate folder.
+- Never follows junctions or symbolic links: a link is another name for a folder, not a copy of it.
 - Nothing is deleted without an explicit checkbox selection and a confirmation click.
 - The local server only answers its own page: each run creates a random session token, and requests without it, or from another website, are rejected.
 
 ## Tested on
 
-Windows 11, in both Windows PowerShell 5.1 and PowerShell 7: deleting to the Recycle Bin, the rule that one copy of each set must stay, Show in Explorer and removing a selection on a path with an apostrophe, a crafted file name that must not run as script in the page, and requests to the local server without the session token or from another website, which are rejected.
+Windows 11, in both Windows PowerShell 5.1 and PowerShell 7: deleting to the Recycle Bin, the rule that one copy of each set must stay (also after sorting, filtering and deleting), a junction to a scanned folder and one folder chosen with two spellings (neither is reported as a duplicate), Show in Explorer and removing a selection on a path with an apostrophe, a crafted file name that must not run as script in the page, and requests to the local server without the session token or from another website, which are rejected.

@@ -9,7 +9,8 @@ folder, drive or file, and scan them. Files with the same size and MD5 hash are 
 and a copy of an entire folder tree is reported as one duplicate folder.
 
 Only the copies you check are deleted, after a confirmation, and always to the Recycle Bin. At least one
-copy of each set must stay unchecked. OneDrive cloud-only files are skipped and never downloaded.
+copy of each set must stay unchecked. OneDrive cloud-only files are skipped and never downloaded, and
+junctions and symbolic links are not followed.
 
 Keep this PowerShell window open while you use the page: it is the engine behind it. Close the window,
 or press Ctrl+C, to stop the server.
@@ -98,6 +99,17 @@ $ScanWorkerScript = {
         return (($raw -band $FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) -ne 0) -or (($raw -band $FILE_ATTRIBUTE_OFFLINE) -ne 0)
     }
 
+    function Test-IsLink {
+        # A junction or symbolic link is another name for a folder or file, not a copy of it.
+        # OneDrive items are reparse points too, but they have no link type.
+        param($Item)
+        try {
+            return [bool]($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -and [bool]$Item.LinkType
+        } catch {
+            return $false
+        }
+    }
+
     function Invoke-Walk {
         param([string]$RootPath, $AllDirs, $AllFiles)
         $stack = New-Object System.Collections.Generic.Stack[string]
@@ -112,10 +124,9 @@ $ScanWorkerScript = {
             try { $dirs = [System.IO.Directory]::GetDirectories($current) } catch { $dirs = @() }
             foreach ($d in $dirs) {
                 $name = Split-Path $d -Leaf
-                if ($ExcludeDirNames -notcontains $name) {
-                    $AllDirs.Add($d)
-                    $stack.Push($d)
-                }
+                if ($ExcludeDirNames -contains $name -or (Test-IsLink -Item ([System.IO.DirectoryInfo]$d))) { continue }
+                $AllDirs.Add($d)
+                $stack.Push($d)
             }
             try { $files = [System.IO.Directory]::GetFiles($current) } catch { $files = @() }
             foreach ($f in $files) { $AllFiles.Add($f) }
@@ -139,12 +150,15 @@ $ScanWorkerScript = {
     try {
         $State.Phase = 'walking'
         # A location may be chosen twice, or one chosen location may sit inside another.
-        # Sets prevent one physical path from being reported as a duplicate of itself.
+        # Sets, and one spelling per location (C:/Data and C:\Data\ are the same folder), prevent
+        # one physical path from being reported as a duplicate of itself.
         $allDirs = New-Object 'System.Collections.Generic.HashSet[string]' $ignoreCase
         $allFiles = New-Object 'System.Collections.Generic.HashSet[string]' $ignoreCase
         foreach ($folder in $Folders) {
             if (Test-Path -LiteralPath $folder) {
-                Invoke-Walk -RootPath $folder -AllDirs $allDirs -AllFiles $allFiles
+                $root = [System.IO.Path]::GetFullPath($folder)
+                if ($root.Length -gt 3) { $root = $root.TrimEnd('\') }
+                Invoke-Walk -RootPath $root -AllDirs $allDirs -AllFiles $allFiles
                 $State.FilesFound = $allFiles.Count
             }
         }
@@ -153,18 +167,16 @@ $ScanWorkerScript = {
         $fileSize = New-Object 'System.Collections.Generic.Dictionary[string,int64]' $ignoreCase
         $sizeMap = @{}
         $totalFiles = 0
-        $skippedCloudOnly = 0
 
         foreach ($file in $allFiles) {
             try { $item = Get-Item -LiteralPath $file -ErrorAction Stop } catch { continue }
-            if (Test-IsCloudOnly -Attributes $item.Attributes) { $skippedCloudOnly++; continue }
+            if ((Test-IsCloudOnly -Attributes $item.Attributes) -or (Test-IsLink -Item $item)) { continue }
             $fileSize[$file] = $item.Length
             if (-not $sizeMap.ContainsKey($item.Length)) { $sizeMap[$item.Length] = New-Object System.Collections.Generic.List[string] }
             $sizeMap[$item.Length].Add($file)
             $totalFiles++
             $State.FilesRead = $totalFiles
         }
-        $State.SkippedCloudOnly = $skippedCloudOnly
 
         $candidateGroups = @($sizeMap.GetEnumerator() | Where-Object { $_.Value.Count -gt 1 })
         $candidateCount = 0
@@ -459,7 +471,7 @@ $Html = @'
 <header>
   <div>
     <h1>Duplicate Finder</h1>
-    <div class="subtitle">Keep this window's PowerShell process running while you use the page.</div>
+    <div class="subtitle">Keep the PowerShell window open while you use this page.</div>
   </div>
   <button class="theme-toggle" id="themeToggle" type="button">Toggle theme</button>
 </header>
@@ -513,6 +525,7 @@ $Html = @'
 const SESSION_TOKEN = '__SESSION_TOKEN__';
 let currentData = [];
 let selected = new Set();
+let recycled = new Set();
 let scanTargets = new Set();
 let activeJobId = null;
 
@@ -696,6 +709,7 @@ function showScanResults(result) {
     <div class="stat"><div class="num">${result.fileCount || 0}</div><div class="label">Duplicate file sets</div></div>
   `;
   selected.clear();
+  recycled.clear();
   showView('view-results');
   render();
 }
@@ -741,9 +755,10 @@ function render() {
       <div class="paths">
         ${d.paths.map(p => `
           <div class="path-row" data-path="${encodeURIComponent(p)}">
-            <input type="checkbox" data-path="${encodeURIComponent(p)}">
+            <input type="checkbox" data-path="${encodeURIComponent(p)}"${selected.has(p) ? ' checked' : ''}${recycled.has(p) ? ' disabled' : ''}>
             <span class="p">${esc(p)}</span>
             <button type="button" class="reveal" data-path="${encodeURIComponent(p)}">Show in Explorer</button>
+            ${recycled.has(p) ? '<span class="status-tag ok">Recycled</span>' : ''}
           </div>
         `).join('')}
       </div>
@@ -758,9 +773,9 @@ function render() {
 function toggleSelect(cb) {
   const path = decodeURIComponent(cb.getAttribute('data-path'));
   const groupEl = cb.closest('.paths');
-  const boxes = Array.from(groupEl.querySelectorAll('input[type=checkbox]'));
-  const checkedCount = boxes.filter(b => b.checked).length;
-  if (cb.checked && checkedCount === boxes.length) {
+  // A copy already in the Recycle Bin (its box is disabled) is not a copy that stays.
+  const boxes = Array.from(groupEl.querySelectorAll('input[type=checkbox]')).filter(b => !b.disabled);
+  if (cb.checked && boxes.every(b => b.checked)) {
     cb.checked = false;
     alert('At least one copy has to stay -- uncheck another one in this group first.');
     return;
@@ -817,6 +832,7 @@ document.getElementById('deleteBtn').addEventListener('click', async () => {
         cb.disabled = true;
         cb.checked = false;
         selected.delete(r.path);
+        recycled.add(r.path);
       }
     }
   });

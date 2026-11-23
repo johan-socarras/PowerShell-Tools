@@ -340,7 +340,8 @@ if ($DiskCriticalPercent -ge $DiskWarningPercent) {
 # .NET file methods resolve relative paths from the process folder, not from the PowerShell location.
 $ReportPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ReportPath)
 $reportFolder = Split-Path -Parent $ReportPath
-if (-not (Test-Path -LiteralPath $reportFolder -PathType Container)) {
+# Not Test-Path: in Windows PowerShell 5.1 it stops with an error on a share that cannot be reached.
+if (-not [System.IO.Directory]::Exists($reportFolder)) {
     Write-Error "The report folder does not exist: $reportFolder"
     exit 1
 }

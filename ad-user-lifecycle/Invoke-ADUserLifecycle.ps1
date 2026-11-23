@@ -268,7 +268,11 @@ if ($PSCmdlet.ParameterSetName -eq 'Onboard') {
 }
 
 # The report is written even with -WhatIf: it is the list of what would happen.
-$results | Export-Csv -LiteralPath $ReportPath -NoTypeInformation -Encoding UTF8 -WhatIf:$false
+# Windows PowerShell 5.1 writes a "#TYPE" line unless told not to. PowerShell 7 never writes it and
+# warns that the switch is obsolete.
+$csvOptions = @{ LiteralPath = $ReportPath; Encoding = 'UTF8'; WhatIf = $false }
+if ($PSVersionTable.PSVersion.Major -lt 6) { $csvOptions.NoTypeInformation = $true }
+$results | Export-Csv @csvOptions
 $summary = ($results | Group-Object Result | ForEach-Object { "$($_.Name): $($_.Count)" }) -join ', '
 Write-Host "$($PSCmdlet.ParameterSetName): $($results.Count) row(s). $summary"
 Write-Host "Report: $ReportPath"

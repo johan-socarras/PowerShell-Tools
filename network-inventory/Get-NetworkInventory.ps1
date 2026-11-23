@@ -218,19 +218,21 @@ if ($prefix -ge 31) {
 $addresses = @(for ($n = $first; $n -le $last; $n++) { ConvertTo-IPString -Number $n })
 $cidr = "$(ConvertTo-IPString -Number $network)/$prefix"
 
-if (-not (Test-Path -LiteralPath $OutputFolder -PathType Container)) {
+# .NET file methods resolve relative paths from the process folder, not from the PowerShell location.
+$OutputFolder = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputFolder)
+# Not Test-Path: in Windows PowerShell 5.1 it stops with an error on a share that cannot be reached.
+if (-not [System.IO.Directory]::Exists($OutputFolder)) {
     Write-Error "The output folder does not exist: $OutputFolder"
     exit 1
 }
-# .NET file methods resolve relative paths from the process folder, not from the PowerShell location.
-$OutputFolder = (Resolve-Path -LiteralPath $OutputFolder).Path
 
 # Vendor list.
 if ($UpdateVendorList) {
     Write-Host "Downloading the IEEE vendor list to $VendorListPath..."
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-        Invoke-WebRequest -Uri $vendorListUrl -OutFile $VendorListPath -UseBasicParsing -ErrorAction Stop
+        # The IEEE server refuses the default user agent of Windows PowerShell 5.1 (HTTP 418).
+        Invoke-WebRequest -Uri $vendorListUrl -OutFile $VendorListPath -UseBasicParsing -UserAgent 'Get-NetworkInventory.ps1' -ErrorAction Stop
     } catch {
         Write-Error "Could not download the vendor list from ${vendorListUrl}: $($_.Exception.Message)"
         exit 1
@@ -356,7 +358,11 @@ $baseName = 'network-inventory-{0}-{1}' -f ($cidr -replace '[./]', '-'), $stamp.
 $written = @()
 if ($Format -in 'Csv', 'Both') {
     $csvPath = Join-Path $OutputFolder "$baseName.csv"
-    $devices | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
+    # Windows PowerShell 5.1 writes a "#TYPE" line unless told not to. PowerShell 7 never writes it
+    # and warns that the switch is obsolete.
+    $csvOptions = @{ LiteralPath = $csvPath; Encoding = 'UTF8' }
+    if ($PSVersionTable.PSVersion.Major -lt 6) { $csvOptions.NoTypeInformation = $true }
+    $devices | Export-Csv @csvOptions
     $written += $csvPath
 }
 if ($Format -in 'Html', 'Both') {

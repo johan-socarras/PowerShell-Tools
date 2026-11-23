@@ -1672,7 +1672,8 @@ $script:LogFile = if ($LogPath) { $ExecutionContext.SessionState.Path.GetUnresol
 if ($JsonPath) { $JsonPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($JsonPath) }
 foreach ($file in @($script:ReportFile, $script:LogFile, $JsonPath | Where-Object { $_ })) {
     $folder = Split-Path -Parent $file
-    if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+    # Not Test-Path: in Windows PowerShell 5.1 it stops with an error on a share that cannot be reached.
+    if (-not [System.IO.Directory]::Exists($folder)) {
         $script:LogFile = $null
         Write-Error "The folder does not exist: $folder"
         exit 2

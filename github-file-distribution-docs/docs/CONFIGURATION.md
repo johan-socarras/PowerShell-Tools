@@ -1,98 +1,42 @@
-# Configuration Guide
+# Configuration
 
-This document explains the main configuration values used by the PowerShell scripts.
+Every setting is in the CONFIGURATION section at the top of each script. The scripts stop while the example values are still there, instead of failing later.
 
-## Update File
+## Download-Update.ps1
 
-`Download-Update.ps1` downloads the update from `$DownloadUrl`, a raw file URL in the update repository. That repository must be public, because the download does not send a token. `$FileName` is the name of the local copy.
+| Setting | What it is |
+| --- | --- |
+| `$DownloadUrl` | Raw URL of the update file in the public update repository, for example `https://raw.githubusercontent.com/example-owner/example-update-repository/main/UpdatePackage.txt`. |
+| `$ChecksumUrl` | URL of its checksum file. By default the same URL with `.sha256` added. |
+| `$FileName` | Name of the local copy. |
+| `$Destination` | Where the local copy is kept. Default: `$env:ProgramData\FileDistribution\<FileName>`. |
+| `$SiteID` | This location's ID, unique per location (`SITE-001`). It names the daily report file. |
+| `$RepoOwner`, `$RepoName`, `$Branch` | The report repository and its branch. |
+| `$PendingQueue` | Where reports that could not be sent wait for the next run. Default: `$env:ProgramData\FileDistribution\PendingReports.json`. |
+
+The token is read from the `GITHUB_TOKEN` environment variable. To set it for every new session of the account that runs the script:
 
 ```powershell
-$DownloadUrl = "https://raw.githubusercontent.com/example-owner/example-update-repository/main/UpdatePackage.txt"
-$FileName    = "UpdatePackage.txt"
+setx GITHUB_TOKEN "<token>"
 ```
 
-The script also requires a SHA-256 checksum URL. Publish a file next to the update, such as `UpdatePackage.txt.sha256`, containing the 64-character SHA-256 value of the update file.
+Close and reopen PowerShell, or restart the scheduled task, so it sees the new value.
 
-```powershell
-$ChecksumUrl = "$DownloadUrl.sha256"
-```
+## Get-DailyReport.ps1
 
-Generate and upload the checksum whenever the update file changes:
+| Setting | What it is |
+| --- | --- |
+| `$MasterLocations` | The `SiteID` of every location expected to report. |
+| `$RepoOwner`, `$RepoName` | The report repository, the same as in `Download-Update.ps1`. |
+
+`GITHUB_TOKEN` is needed here only when the report repository is private.
+
+## Publishing an update
+
+Publish the file and, next to it, a checksum file with the same name plus `.sha256` that contains its 64-character SHA-256 value. Generate the checksum every time the file changes:
 
 ```powershell
 (Get-FileHash .\UpdatePackage.txt -Algorithm SHA256).Hash | Set-Content .\UpdatePackage.txt.sha256 -Encoding ascii
 ```
 
-Example file types:
-
-- `.txt`
-- `.csv`
-- `.json`
-- `.xml`
-- configuration files
-
-## Report Repository
-
-Each location writes its daily report to a separate repository. Set `$RepoOwner` and `$RepoName` in both scripts; `$Branch` is only used by `Download-Update.ps1`:
-
-```powershell
-$RepoOwner = "your-github-username"
-$RepoName  = "your-repository-name"
-$Branch    = "main"
-```
-
-## Location ID
-
-Each location must use a unique ID:
-
-```powershell
-$SiteID = "SITE-001"
-```
-
-Examples:
-
-```text
-SITE-001
-SITE-002
-SITE-003
-SITE-004
-```
-
-The `SiteID` is used to create the daily report file in GitHub.
-
-## Local Destination
-
-The download script stores the update file locally.
-
-Example:
-
-```powershell
-$Destination = "$env:ProgramData\FileDistribution\$FileName"
-```
-
-This can be changed to another local folder depending on the system where the file needs to be used.
-
-## Pending Reports
-
-If the script cannot send a report to GitHub, it stores the report locally and tries again later.
-
-Example:
-
-```powershell
-$PendingQueue = "$env:ProgramData\FileDistribution\PendingReports.json"
-```
-
-This helps avoid losing status reports when a location temporarily loses internet access.
-
-## GitHub Token
-
-The token should be read from an environment variable:
-
-```powershell
-$GitHubToken = $env:GITHUB_TOKEN
-```
-
-Do not write the token directly inside the script.
-
-Both scripts must be configured with the actual report repository owner and name, and `Download-Update.ps1` with the actual `$DownloadUrl`. The example values deliberately stop the scripts instead of letting them fail later.
-
+Keep the file in place until every location reports a successful status in `Get-DailyReport.ps1`.

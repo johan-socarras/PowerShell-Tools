@@ -73,7 +73,7 @@ cmorgan,Left the company
 
 ## Sample output
 
-Each run writes a CSV report. These are from the lab domain, with test users. A dry run of onboarding, with a fourth row whose department has no OU or group:
+Each run writes a CSV report. These are from the lab domain, whose input files had more test rows than the samples in this folder. A dry run of onboarding, with a fourth row whose department has no OU or group:
 
 ```text
 "Time","Action","Identity","Name","Result","Detail"

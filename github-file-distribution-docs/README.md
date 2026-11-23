@@ -1,27 +1,8 @@
 [← All tools](https://github.com/johan-socarras/PowerShell-Tools#tools)
 
-# GitHub File Distribution and Location Reporting System
+# GitHub File Distribution
 
-## Overview
-
-This project provides a PowerShell-based system for distributing a centralized update file from GitHub to multiple remote locations.
-
-Each location downloads the latest file, compares it against the existing local copy, updates it only when needed, and sends a daily status report back to GitHub.
-
-This can be used to distribute files such as:
-
-- price lists
-- product catalogs
-- configuration files
-- CSV, TXT, JSON, or other operational files
-
-The update file is downloaded without a token, so it must live in a public repository. Do not distribute confidential data this way.
-
-The project also includes a reporting script that helps an administrator confirm which locations completed the update and which ones did not report.
-
-## Main Use Case
-
-The system is designed for environments where one central file needs to be distributed to many locations.
+Distributes one update file, such as a price list, a product catalog or a configuration file, from GitHub to many remote locations, and tells the administrator which locations have it. Built in PowerShell with the GitHub REST API, no extra modules.
 
 ```mermaid
 flowchart LR
@@ -42,37 +23,15 @@ flowchart LR
     site1 --> reports
     site2 -->|"(3) daily<br>status report"| reports
     site3 --> reports
-    reports -->|"(4) Generate-DailyReport.ps1:<br>updated, failed, missing"| check
+    reports -->|"(4) Get-DailyReport.ps1:<br>updated, failed, missing"| check
 ```
 
-Example workflow:
+## What it does
 
-1. An administrator publishes the file and its `.sha256` checksum in the update repository.
-2. Each remote location runs the download script.
-3. The script downloads the file and its published SHA256 checksum from GitHub.
-4. The script verifies the downloaded file against that checksum before touching the local copy.
-5. If the verified file is different, the local file is replaced atomically.
-6. The location writes a status report to a separate report repository.
-7. The administrator runs the report script to verify which locations reported successfully.
+- **`scripts/Download-Update.ps1`**, at each location, by hand or from Windows Task Scheduler: downloads the update file and its `.sha256` checksum, verifies the download against the checksum before touching anything, and replaces the local copy in one step only when the file changed. Then it writes the location's status for the day to the report repository, in `Log/<date>/<SiteID>.txt`. A report that cannot be sent is kept and sent on the next run.
+- **`scripts/Get-DailyReport.ps1`**, for the administrator: reads the day's reports, checks each one's `SiteID` and `Status` against the list of expected locations, and lists the locations that did not report and those that reported a failure. It exits with code 1 until every location has the file, so a scheduled run can raise an alert.
 
-## Scripts
-
-### `scripts/Download-Update.ps1`
-
-This script should run at each remote location.
-
-It performs the following actions:
-
-- downloads the update file from GitHub
-- verifies the downloaded file against a required `.sha256` checksum file
-- stores the file temporarily
-- compares the downloaded file with the local version
-- replaces the local file only when a newer or different file is detected
-- sends a status report to GitHub
-- saves pending reports locally if the report cannot be sent
-- is safe to run from Windows Task Scheduler (no interactive pause by default)
-
-Possible reported statuses:
+The statuses a location can report:
 
 ```text
 File Updated Successfully
@@ -83,33 +42,7 @@ Checksum Validation Failed
 Local File Update Failed
 ```
 
-### `scripts/Generate-DailyReport.ps1`
-
-This script is used by the administrator to check reporting status.
-
-It performs the following actions:
-
-- reads the master list of expected locations
-- checks the daily log folder in GitHub
-- validates each report's `SiteID` and `Status`
-- distinguishes successful locations, reported failures, and locations that did not report
-- confirms success only when every expected location has a successful status
-
-## GitHub Log Structure
-
-Each location creates one report file per day.
-
-Recommended log structure:
-
-```text
-Log/
-└── 2026-06-30/
-    ├── SITE-001.txt
-    ├── SITE-002.txt
-    └── SITE-003.txt
-```
-
-Example report file:
+A report file:
 
 ```text
 SiteID: SITE-001
@@ -119,77 +52,28 @@ Timestamp: 2026-06-30T17:30:00.0000000-05:00
 
 ## Requirements
 
-- Windows
-- PowerShell 5.1 or newer
-- Internet access from each remote location
-- Two GitHub repositories: a public one for the update file and a separate one for the reports
-- A GitHub token that can only write to the report repository (for example, a fine-grained token with Contents: Read and write on that repository alone)
+- Windows PowerShell 5.1 or PowerShell 7, on Windows, and internet access at each location.
+- Two GitHub repositories: a public one for the update file, which the locations download without a token, and a separate one for the reports.
+- A token that can only write to the report repository (a fine-grained token with Contents: Read and write on that repository alone), in the `GITHUB_TOKEN` environment variable of each location.
 
 ## Configuration
 
-Each location should have its own unique `SiteID`.
+Both scripts have a CONFIGURATION section at the top. At each location, `Download-Update.ps1` needs its own `$SiteID`, the `$DownloadUrl` of the update file and the report repository (`$RepoOwner`, `$RepoName`); `Get-DailyReport.ps1` needs the same repository and the list of expected locations. The scripts stop while any of these still has its example value. Every setting, and how to publish the checksum, is in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-Example:
-
-```powershell
-$SiteID = "SITE-001"
-```
-
-Where each location downloads the update from (the public update repository):
+## Usage
 
 ```powershell
-$DownloadUrl = "https://raw.githubusercontent.com/example-owner/example-update-repository/main/UpdatePackage.txt"
-$ChecksumUrl = "$DownloadUrl.sha256"
-$FileName    = "UpdatePackage.txt"
-```
-
-Where each location writes its daily report (the report repository):
-
-```powershell
-$RepoOwner = "your-github-username"
-$RepoName  = "your-repository-name"
-$Branch    = "main"
-```
-
-The script stops if any of these still has its example value. Every setting is explained in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
-
-The GitHub token should be configured as an environment variable:
-
-```powershell
-$GitHubToken = $env:GITHUB_TOKEN
-```
-
-Do not hardcode GitHub tokens directly inside the scripts.
-
-## Example Usage
-
-Run this script at each remote location:
-
-```powershell
+# At each location (add -PauseAtEnd to read the output when started by double-click)
 .\scripts\Download-Update.ps1
-```
 
-By default the script does not pause at the end, so it can run unattended from Windows Task Scheduler. To pause for review when running it manually:
-
-```powershell
-.\scripts\Download-Update.ps1 -PauseAtEnd
-```
-
-Run this script from the administrator machine to check daily reporting:
-
-```powershell
-.\scripts\Generate-DailyReport.ps1
-```
-
-To check a previous day instead of today:
-
-```powershell
-.\scripts\Generate-DailyReport.ps1 -ReportDate "2026-06-30"
+# From the administrator's computer: today's reports, or another day's
+.\scripts\Get-DailyReport.ps1
+.\scripts\Get-DailyReport.ps1 -ReportDate 2026-06-30
 ```
 
 ## Sample output
 
-The daily report for five locations (sample data): three updated, one sent nothing and one reported a failed checksum. The script exits with code 1, so a scheduled run can raise an alert.
+The daily report for five locations (sample data): three updated, one sent nothing and one reported a failed checksum. A location without a report usually has no internet access or did not run its scheduled task; it sends its report on its next run.
 
 ```text
 Daily report: 2026-06-30
@@ -204,26 +88,12 @@ REPORTED FAILURE:
 Do not remove the update file until all locations report a successful status.
 ```
 
-## Recommended Improvements
+## Security
 
-Future improvements could include:
+- Keep the token out of the scripts. If one is ever committed, revoke it in GitHub, create a new one and update the `GITHUB_TOKEN` variable at the locations.
+- The update repository is public, because the download sends no token: do not distribute confidential data this way.
+- The checksum catches a corrupted or incomplete download. It does not stop someone who can change both the file and its checksum, so protect the branch that hosts the update file, and never give the locations write access to the update repository.
 
-- move the master location list to a CSV or JSON file
-- convert fixed script values into parameters
-- generate CSV or HTML reports
-- send alerts through email or Microsoft Teams
-- automate execution with Windows Task Scheduler
-- support multiple update files
-- validate downloaded files with a digital signature in addition to the required checksum
-- add local log files for troubleshooting
+## Tested on
 
-## Security Notice
-
-Never commit GitHub tokens, passwords, internal server paths, or confidential business data to the repository.
-
-Protect the branch that hosts the update file and restrict who can change it. A checksum protects against a corrupted or incomplete download; it does not protect against an attacker who can change both the update file and its checksum. That is why the locations never get write access to the update repository.
-
-If a token was ever committed to GitHub, revoke it immediately and generate a new one.
-
-See [SECURITY.md](SECURITY.md) for more details.
-
+Windows 11, in Windows PowerShell 5.1 and PowerShell 7, against a local stand-in for the GitHub API: a new update file, the same file again, a wrong checksum, and reports kept while the connection was down and sent once it came back. The daily report, with the five sample locations above.

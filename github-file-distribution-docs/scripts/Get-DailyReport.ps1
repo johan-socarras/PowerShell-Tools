@@ -15,12 +15,12 @@ needed only when the report repository is private.
 Day to check, as yyyy-MM-dd. Default: today.
 
 .EXAMPLE
-powershell -ExecutionPolicy Bypass -File .\Generate-DailyReport.ps1
+powershell -ExecutionPolicy Bypass -File .\Get-DailyReport.ps1
 
 Checks today's reports.
 
 .EXAMPLE
-powershell -ExecutionPolicy Bypass -File .\Generate-DailyReport.ps1 -ReportDate 2026-06-30
+powershell -ExecutionPolicy Bypass -File .\Get-DailyReport.ps1 -ReportDate 2026-06-30
 
 Checks the reports of 30 June 2026.
 
@@ -138,7 +138,7 @@ if ($failed.Count -gt 0) {
 }
 
 if ($missing.Count -eq 0 -and $failed.Count -eq 0) {
-    Write-Host "`nTOTAL SUCCESS! All locations downloaded or already had the verified file." -ForegroundColor Green
+    Write-Host "`nAll locations downloaded or already had the verified file." -ForegroundColor Green
     exit 0
 }
 

@@ -15,7 +15,7 @@ Keep this PowerShell window open while you use the page: it is the engine behind
 or press Ctrl+C, to stop the server.
 
 .EXAMPLE
-powershell -ExecutionPolicy Bypass -File .\duplicate_finder_app.ps1
+powershell -ExecutionPolicy Bypass -File .\Start-DuplicateFinder.ps1
 
 Starts the server and opens the page in the default browser.
 
@@ -55,7 +55,7 @@ function Get-Preset {
 }
 
 function Get-BrowseListing {
-    param([string]$Path, [bool]$IncludeFiles)
+    param([string]$Path)
 
     if ([string]::IsNullOrWhiteSpace($Path)) {
         $drives = [System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -in @('Fixed', 'Removable') }
@@ -72,13 +72,11 @@ function Get-BrowseListing {
     $dirs = @($dirNames | Sort-Object | ForEach-Object { [pscustomobject]@{ name = (Split-Path $_ -Leaf); path = $_ } })
 
     $files = @()
-    if ($IncludeFiles) {
-        try {
-            $files = @([System.IO.Directory]::GetFiles($Path) | Sort-Object | ForEach-Object {
-                [pscustomobject]@{ name = (Split-Path $_ -Leaf); path = $_ }
-            })
-        } catch { Write-Verbose "Can't list the files in ${Path}: $($_.Exception.Message)" }
-    }
+    try {
+        $files = @([System.IO.Directory]::GetFiles($Path) | Sort-Object | ForEach-Object {
+            [pscustomobject]@{ name = (Split-Path $_ -Leaf); path = $_ }
+        })
+    } catch { Write-Verbose "Can't list the files in ${Path}: $($_.Exception.Message)" }
 
     $parent = Split-Path $Path -Parent
     return [pscustomobject]@{ path = $Path; parent = $parent; dirs = $dirs; files = $files; error = $null }
@@ -376,30 +374,16 @@ $Html = @'
 <meta charset="utf-8">
 <title>Duplicate Finder</title>
 <style>
+  /* Light by default; the script sets data-theme from the saved choice or the system setting. */
   :root {
-    color-scheme: light dark;
-    --bg: #f5f6f8; --card: #ffffff; --text: #1a1d23; --muted: #6b7280;
-    --border: #e3e5e8; --accent: #2f6feb; --accent-bg: #eaf0ff; --danger: #d64545; --danger-bg: #fdecec;
-    --folder-badge: #eef2ff; --folder-text: #4338ca;
-    --file-badge: #f0fdf4; --file-text: #15803d;
-    --ok-bg: #f0fdf4; --ok-text: #15803d;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #14161a; --card: #1d2026; --text: #e8eaed; --muted: #9aa0a6;
-      --border: #2c2f36; --accent: #6c9bff; --accent-bg: #1c2540; --danger: #ff6b6b; --danger-bg: #3a1f1f;
-      --folder-badge: #26264a; --folder-text: #a5b4fc;
-      --file-badge: #1c3324; --file-text: #86efac;
-      --ok-bg: #1c3324; --ok-text: #86efac;
-    }
-  }
-  :root[data-theme="light"] {
+    color-scheme: light;
     --bg: #f5f6f8; --card: #ffffff; --text: #1a1d23; --muted: #6b7280;
     --border: #e3e5e8; --accent: #2f6feb; --accent-bg: #eaf0ff; --danger: #d64545; --danger-bg: #fdecec;
     --folder-badge: #eef2ff; --folder-text: #4338ca; --file-badge: #f0fdf4; --file-text: #15803d;
     --ok-bg: #f0fdf4; --ok-text: #15803d;
   }
   :root[data-theme="dark"] {
+    color-scheme: dark;
     --bg: #14161a; --card: #1d2026; --text: #e8eaed; --muted: #9aa0a6;
     --border: #2c2f36; --accent: #6c9bff; --accent-bg: #1c2540; --danger: #ff6b6b; --danger-bg: #3a1f1f;
     --folder-badge: #26264a; --folder-text: #a5b4fc; --file-badge: #1c3324; --file-text: #86efac;
@@ -435,7 +419,6 @@ $Html = @'
   button.primary { background: var(--accent); color: white; border: none; }
   button.danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
-  button.small { padding: 7px 11px; font-size: 13px; }
   .browse-button { min-width: 102px; }
   .add-path-button { min-width: 145px; font-weight: 650; }
   .browser-selection { margin: 10px 2px 0; color: var(--muted); font-size: 13px; }
@@ -464,7 +447,6 @@ $Html = @'
   .path-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-family: Consolas, monospace; font-size: 13px; border-top: 1px solid var(--border); }
   .path-row span.p { flex: 1; word-break: break-all; }
   .path-row button { padding: 4px 10px; font-size: 12px; }
-  .keep-tag { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
   .status-tag { font-size: 11px; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
   .status-tag.ok { background: var(--ok-bg); color: var(--ok-text); }
   .status-tag.fail { background: var(--danger-bg); color: var(--danger); }
@@ -608,74 +590,64 @@ function removeTarget(encPath) {
 
 // ---------- Folder/file browser ----------
 
-function makeBrowser(containerId, opts) {
-  const container = document.getElementById(containerId);
-  let currentPath = '';
-  let selectedPath = '';
-  let browserOpen = false;
+const browser = document.getElementById('scanBrowser');
+let browserPath = '';
+let browserSelection = '';
+let browserOpen = false;
 
-  async function load(path) {
-    currentPath = path;
-    selectedPath = path;
-    const filesParam = opts.includeFiles ? '&files=1' : '';
-    const res = await api('/api/browse?path=' + encodeURIComponent(path || '') + filesParam);
-    const data = await res.json();
-    container.innerHTML = `
-      <div class="browser">
-        <div class="path-bar">
-          <input type="text" value="${esc(data.path || '')}" placeholder="Paste or type a folder/file path, then add it" id="${containerId}-input">
-          <button class="browse-button" id="${containerId}-browse">Browse</button>
-          <button class="primary add-path-button" id="${containerId}-add">Add this path</button>
-        </div>
-        <div class="browser-selection" id="${containerId}-selection">${selectedPath ? `Selected: ${esc(selectedPath)}` : 'Select a drive, folder, or file.'}</div>
-        <div class="entries ${browserOpen ? '' : 'hidden'}" id="${containerId}-entries">
-          ${data.error ? `<div class="note">Can't list this folder: ${esc(data.error)}</div>` : ''}
-          ${data.parent ? `<div class="entry-row dir" data-path="${encodeURIComponent(data.parent)}"><span>&#8592;</span><span class="name">Up one level</span></div>` : ''}
-          ${(data.dirs || []).map(d => `<div class="entry-row dir" data-path="${encodeURIComponent(d.path)}"><span>&#128193;</span><span class="name">${esc(d.name)}</span></div>`).join('')}
-          ${opts.includeFiles ? (data.files || []).map(f => `
-            <div class="entry-row file" data-path="${encodeURIComponent(f.path)}"><span>&#128196;</span><span class="name">${esc(f.name)}</span></div>`).join('') : ''}
-        </div>
+async function loadBrowser(path) {
+  browserPath = path;
+  browserSelection = path;
+  const res = await api('/api/browse?path=' + encodeURIComponent(path || ''));
+  const data = await res.json();
+  browser.innerHTML = `
+    <div class="browser">
+      <div class="path-bar">
+        <input type="text" value="${esc(data.path || '')}" placeholder="Paste or type a folder/file path, then add it" id="browserInput">
+        <button class="browse-button" id="browserToggle">Browse</button>
+        <button class="primary add-path-button" id="browserAdd">Add this path</button>
       </div>
-    `;
-    const input = document.getElementById(containerId + '-input');
-    const selection = document.getElementById(containerId + '-selection');
-    const setSelection = (path, row) => {
-      selectedPath = path;
-      input.value = path;
-      selection.textContent = 'Selected: ' + path;
-      container.querySelectorAll('.entry-row').forEach(el => el.classList.remove('selected'));
-      if (row) row.classList.add('selected');
-    };
-    container.querySelectorAll('.entry-row.dir').forEach(row => {
-      row.addEventListener('click', () => load(decodeURIComponent(row.getAttribute('data-path'))));
+      <div class="browser-selection" id="browserSelection">${browserSelection ? `Selected: ${esc(browserSelection)}` : 'Select a drive, folder, or file.'}</div>
+      <div class="entries ${browserOpen ? '' : 'hidden'}" id="browserEntries">
+        ${data.error ? `<div class="note">Can't list this folder: ${esc(data.error)}</div>` : ''}
+        ${data.parent ? `<div class="entry-row dir" data-path="${encodeURIComponent(data.parent)}"><span>&#8592;</span><span class="name">Up one level</span></div>` : ''}
+        ${(data.dirs || []).map(d => `<div class="entry-row dir" data-path="${encodeURIComponent(d.path)}"><span>&#128193;</span><span class="name">${esc(d.name)}</span></div>`).join('')}
+        ${(data.files || []).map(f => `<div class="entry-row file" data-path="${encodeURIComponent(f.path)}"><span>&#128196;</span><span class="name">${esc(f.name)}</span></div>`).join('')}
+      </div>
+    </div>
+  `;
+  const input = document.getElementById('browserInput');
+  const selection = document.getElementById('browserSelection');
+  browser.querySelectorAll('.entry-row.dir').forEach(row => {
+    row.addEventListener('click', () => loadBrowser(decodeURIComponent(row.getAttribute('data-path'))));
+  });
+  browser.querySelectorAll('.entry-row.file').forEach(row => {
+    row.addEventListener('click', () => {
+      browserSelection = decodeURIComponent(row.getAttribute('data-path'));
+      input.value = browserSelection;
+      selection.textContent = 'Selected: ' + browserSelection;
+      browser.querySelectorAll('.entry-row').forEach(el => el.classList.remove('selected'));
+      row.classList.add('selected');
     });
-    container.querySelectorAll('.entry-row.file').forEach(row => {
-      row.addEventListener('click', () => setSelection(decodeURIComponent(row.getAttribute('data-path')), row));
-    });
-    document.getElementById(containerId + '-browse').addEventListener('click', () => {
-      browserOpen = !browserOpen;
-      document.getElementById(containerId + '-entries').classList.toggle('hidden', !browserOpen);
-    });
-    document.getElementById(containerId + '-add').addEventListener('click', () => {
-      const path = input.value.trim() || selectedPath || currentPath;
-      if (path) opts.onAddPath(path);
-    });
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const path = input.value.trim();
-        if (path) load(path);
-      }
-    });
-  }
-
-  load('');
+  });
+  document.getElementById('browserToggle').addEventListener('click', () => {
+    browserOpen = !browserOpen;
+    document.getElementById('browserEntries').classList.toggle('hidden', !browserOpen);
+  });
+  document.getElementById('browserAdd').addEventListener('click', () => {
+    const path = input.value.trim() || browserSelection || browserPath;
+    if (path) { scanTargets.add(path); renderChips(); }
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const path = input.value.trim();
+      if (path) loadBrowser(path);
+    }
+  });
 }
 
-makeBrowser('scanBrowser', {
-  includeFiles: true,
-  onAddPath: (path) => { scanTargets.add(path); renderChips(); }
-});
+loadBrowser('');
 
 // ---------- Start scan ----------
 
@@ -903,105 +875,108 @@ Write-Host "Duplicate Finder running at http://localhost:$port/"
 Write-Host "Keep this window open while you use the page. Press Ctrl+C to stop."
 Start-Process "http://localhost:$port/"
 
-while ($listener.IsListening) {
-    $context = $listener.GetContext()
-    $request = $context.Request
-    $response = $context.Response
-    try {
-        $path = $request.Url.AbsolutePath
-        $method = $request.HttpMethod
-
-        if ($path.StartsWith('/api/') -and -not (Test-ApiRequest -Request $request -Port $port)) {
-            Write-JsonResponse -Response $response -Data @{ error = 'forbidden' } -StatusCode 403
-        }
-        elseif ($method -eq 'GET' -and $path -eq '/') {
-            Write-HtmlResponse -Response $response -Html $PageHtml
-        }
-        elseif ($method -eq 'GET' -and $path -eq '/api/presets') {
-            Write-JsonResponse -Response $response -Data (Get-Preset)
-        }
-        elseif ($method -eq 'GET' -and $path -eq '/api/browse') {
-            $qs = [System.Web.HttpUtility]::ParseQueryString($request.Url.Query)
-            $reqPath = $qs['path']
-            $includeFiles = $qs['files'] -eq '1'
-            Write-JsonResponse -Response $response -Data (Get-BrowseListing -Path $reqPath -IncludeFiles $includeFiles)
-        }
-        elseif ($method -eq 'POST' -and $path -eq '/api/scan/start') {
-            $body = Read-JsonBody -Request $request
-            $folders = @($body.folders)
-            $id = Invoke-BackgroundJob -Script $ScanWorkerScript -ArgList @(, $folders)
-            Write-JsonResponse -Response $response -Data @{ id = $id }
-        }
-        elseif ($method -eq 'GET' -and $path -eq '/api/job/progress') {
-            $qs = [System.Web.HttpUtility]::ParseQueryString($request.Url.Query)
-            $id = $qs['id']
-            if ($script:Jobs.ContainsKey($id)) {
-                $state = $script:Jobs[$id]
-                $data = @{
-                    status = $state.Status; phase = $state.Phase; error = $state.Error
-                    filesFound = $state.FilesFound; filesRead = $state.FilesRead
-                    hashTotal = $state.HashTotal; hashed = $state.Hashed
-                    result = $state.Result
-                }
-                Write-JsonResponse -Response $response -Data $data
-                if ($state.Status -in @('done', 'error') -and $script:JobHandles.ContainsKey($id)) {
-                    try {
-                        $j = $script:JobHandles[$id]
-                        $j.PS.EndInvoke($j.Handle) | Out-Null
-                        $j.PS.Dispose()
-                    } catch { Write-Verbose "Could not release the finished job ${id}: $($_.Exception.Message)" }
-                    $script:JobHandles.Remove($id)
-                }
-            } else {
-                Write-JsonResponse -Response $response -Data @{ status = 'unknown' } -StatusCode 404
-            }
-        }
-        elseif ($method -eq 'POST' -and $path -eq '/api/delete') {
-            Add-Type -AssemblyName Microsoft.VisualBasic
-            $body = Read-JsonBody -Request $request
-            $results = New-Object System.Collections.Generic.List[object]
-            foreach ($p in @($body.paths)) {
-                try {
-                    if (-not (Test-Path -LiteralPath $p)) {
-                        $results.Add(@{ path = $p; ok = $false; error = 'Not found' })
-                        continue
-                    }
-                    if (Test-Path -LiteralPath $p -PathType Container) {
-                        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
-                    } else {
-                        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
-                    }
-                    $results.Add(@{ path = $p; ok = $true; error = $null })
-                } catch {
-                    $results.Add(@{ path = $p; ok = $false; error = $_.Exception.Message })
-                }
-            }
-            Write-JsonResponse -Response $response -Data @{ results = $results }
-        }
-        elseif ($method -eq 'POST' -and $path -eq '/api/reveal') {
-            $body = Read-JsonBody -Request $request
-            $p = $body.path
-            if (-not (Test-Path -LiteralPath $p)) {
-                Write-JsonResponse -Response $response -Data @{ ok = $false; error = 'Not found' }
-            } else {
-                try {
-                    Start-Process -FilePath 'explorer.exe' -ArgumentList "/select,`"$p`""
-                    Write-JsonResponse -Response $response -Data @{ ok = $true }
-                } catch {
-                    Write-JsonResponse -Response $response -Data @{ ok = $false; error = $_.Exception.Message }
-                }
-            }
-        }
-        else {
-            $response.StatusCode = 404
-            Write-JsonResponse -Response $response -Data @{ error = 'not found' } -StatusCode 404
-        }
-    } catch {
+try {
+    while ($listener.IsListening) {
+        # Wait in short steps, not in one blocking call, so Ctrl+C can stop the server between them.
+        $pending = $listener.GetContextAsync()
+        while (-not $pending.AsyncWaitHandle.WaitOne(500)) { }
+        $context = $pending.GetAwaiter().GetResult()
+        $request = $context.Request
+        $response = $context.Response
         try {
-            $response.StatusCode = 500
-            Write-JsonResponse -Response $response -Data @{ error = $_.Exception.Message } -StatusCode 500
-        } catch { Write-Verbose "Could not send the error response: $($_.Exception.Message)" }
-    } finally {
-        $response.OutputStream.Close()
+            $path = $request.Url.AbsolutePath
+            $method = $request.HttpMethod
+
+            if ($path.StartsWith('/api/') -and -not (Test-ApiRequest -Request $request -Port $port)) {
+                Write-JsonResponse -Response $response -Data @{ error = 'forbidden' } -StatusCode 403
+            }
+            elseif ($method -eq 'GET' -and $path -eq '/') {
+                Write-HtmlResponse -Response $response -Html $PageHtml
+            }
+            elseif ($method -eq 'GET' -and $path -eq '/api/presets') {
+                Write-JsonResponse -Response $response -Data (Get-Preset)
+            }
+            elseif ($method -eq 'GET' -and $path -eq '/api/browse') {
+                $qs = [System.Web.HttpUtility]::ParseQueryString($request.Url.Query)
+                Write-JsonResponse -Response $response -Data (Get-BrowseListing -Path $qs['path'])
+            }
+            elseif ($method -eq 'POST' -and $path -eq '/api/scan/start') {
+                $body = Read-JsonBody -Request $request
+                $folders = @($body.folders)
+                $id = Invoke-BackgroundJob -Script $ScanWorkerScript -ArgList @(, $folders)
+                Write-JsonResponse -Response $response -Data @{ id = $id }
+            }
+            elseif ($method -eq 'GET' -and $path -eq '/api/job/progress') {
+                $qs = [System.Web.HttpUtility]::ParseQueryString($request.Url.Query)
+                $id = $qs['id']
+                if ($script:Jobs.ContainsKey($id)) {
+                    $state = $script:Jobs[$id]
+                    $data = @{
+                        status = $state.Status; phase = $state.Phase; error = $state.Error
+                        filesFound = $state.FilesFound; filesRead = $state.FilesRead
+                        hashTotal = $state.HashTotal; hashed = $state.Hashed
+                        result = $state.Result
+                    }
+                    Write-JsonResponse -Response $response -Data $data
+                    if ($state.Status -in @('done', 'error') -and $script:JobHandles.ContainsKey($id)) {
+                        try {
+                            $j = $script:JobHandles[$id]
+                            $j.PS.EndInvoke($j.Handle) | Out-Null
+                            $j.PS.Dispose()
+                        } catch { Write-Verbose "Could not release the finished job ${id}: $($_.Exception.Message)" }
+                        $script:JobHandles.Remove($id)
+                    }
+                } else {
+                    Write-JsonResponse -Response $response -Data @{ status = 'unknown' } -StatusCode 404
+                }
+            }
+            elseif ($method -eq 'POST' -and $path -eq '/api/delete') {
+                Add-Type -AssemblyName Microsoft.VisualBasic
+                $body = Read-JsonBody -Request $request
+                $results = New-Object System.Collections.Generic.List[object]
+                foreach ($p in @($body.paths)) {
+                    try {
+                        if (-not (Test-Path -LiteralPath $p)) {
+                            $results.Add(@{ path = $p; ok = $false; error = 'Not found' })
+                            continue
+                        }
+                        if (Test-Path -LiteralPath $p -PathType Container) {
+                            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                        } else {
+                            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                        }
+                        $results.Add(@{ path = $p; ok = $true; error = $null })
+                    } catch {
+                        $results.Add(@{ path = $p; ok = $false; error = $_.Exception.Message })
+                    }
+                }
+                Write-JsonResponse -Response $response -Data @{ results = $results }
+            }
+            elseif ($method -eq 'POST' -and $path -eq '/api/reveal') {
+                $body = Read-JsonBody -Request $request
+                $p = $body.path
+                if (-not (Test-Path -LiteralPath $p)) {
+                    Write-JsonResponse -Response $response -Data @{ ok = $false; error = 'Not found' }
+                } else {
+                    try {
+                        Start-Process -FilePath 'explorer.exe' -ArgumentList "/select,`"$p`""
+                        Write-JsonResponse -Response $response -Data @{ ok = $true }
+                    } catch {
+                        Write-JsonResponse -Response $response -Data @{ ok = $false; error = $_.Exception.Message }
+                    }
+                }
+            }
+            else {
+                Write-JsonResponse -Response $response -Data @{ error = 'not found' } -StatusCode 404
+            }
+        } catch {
+            try {
+                Write-JsonResponse -Response $response -Data @{ error = $_.Exception.Message } -StatusCode 500
+            } catch { Write-Verbose "Could not send the error response: $($_.Exception.Message)" }
+        } finally {
+            $response.OutputStream.Close()
+        }
     }
+} finally {
+    $listener.Close()
 }

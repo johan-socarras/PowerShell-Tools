@@ -2,7 +2,7 @@
 
 # Duplicate Finder
 
-A local web app for finding and safely removing duplicate files and folders on Windows, built entirely in PowerShell — no installs, no external dependencies.
+A local web app for finding and safely removing duplicate files and folders on Windows, built entirely in PowerShell, with nothing to install.
 
 ![Duplicate Finder results: duplicate files and a duplicate backup folder, one copy selected for deletion](screenshot.png)
 
@@ -26,13 +26,15 @@ It runs as a small local web app: a PowerShell HTTP server on localhost, with an
 
 ## Usage
 
-    powershell -ExecutionPolicy Bypass -File .\duplicate_finder_app.ps1
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Start-DuplicateFinder.ps1
+```
 
-This opens http://localhost:8791/ in your default browser. Keep the PowerShell window open while using the page — it's the engine behind it. Close the window to stop the server.
+This opens http://localhost:8791/ in your default browser. Keep the PowerShell window open while you use the page: it is the engine behind it. Close the window, or press Ctrl+C in it, to stop the server.
 
 ## Safety notes
 
-- Never deletes permanently — everything goes through the Recycle Bin and can be restored.
+- Never deletes permanently: everything goes through the Recycle Bin and can be restored.
 - Never opens or downloads OneDrive cloud-only files: they are skipped, and a folder that contains one is never reported as a duplicate folder.
 - Nothing is deleted without an explicit checkbox selection and a confirmation click.
 - The local server only answers its own page: each run creates a random session token, and requests without it, or from another website, are rejected.

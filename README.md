@@ -34,17 +34,17 @@ That checks the computer you are on and writes an HTML report in the current fol
 
 ### [AD User Lifecycle](ad-user-lifecycle)
 
-Onboards and offboards Active Directory users from CSV files: accounts in the right OU and group with a temporary password, and leavers disabled, removed from their groups and moved aside. Includes a dry run (`-WhatIf`) and a report of every change. Tested on a Windows Server 2025 domain controller in my home lab.
+New accounts land in their department's OU and group with a temporary password; leavers are disabled, removed from their groups and moved aside. A dry run (`-WhatIf`) shows every change first, and each run writes a report.
 
 ### [Computer Health](computer-health)
 
-Checks a list of Windows computers for low disk space, long uptime, pending restarts and services that should be running, and writes an HTML report with the ones that need attention first. Connects over CIM (WinRM or DCOM) with nothing to install, and exits with an error code for scheduled alerts.
+Writes an HTML report with the computers that need attention first. Connects over CIM (WinRM or DCOM) with nothing to install on them, and exits with an error code for scheduled alerts.
 
 [![Computer Health HTML report with sample data: one unreachable computer, one critical and two warnings listed before the healthy ones](computer-health/screenshot.png)](computer-health)
 
 ### [PC Maintenance](pc-maintenance)
 
-Finds out why one Windows PC is slow or unstable: disk health and errors, memory, processor, startup programs, blue screens and crashes, Windows Update, security software, battery and network, each with what to do. Then runs the usual cleanup and repair steps (temporary files, Recycle Bin, Windows Update cache, DISM and SFC, memory test) with a dry run, and writes an HTML report for the ticket. A window for the technician, or the command line.
+The check covers disk health and errors, memory, processor, startup programs, blue screens and crashes, Windows Update, security software, battery and network, each with what to do. The tasks (temporary files, Recycle Bin, Windows Update cache, DISM and SFC, memory test) have a dry run, and every run writes an HTML report for the ticket.
 
 <p align="center">
   <a href="pc-maintenance"><img src="pc-maintenance/screenshot.png" width="640" alt="PC Maintenance window after a check with sample data: one critical disk finding and five warnings at the top of the results"></a>
@@ -52,7 +52,7 @@ Finds out why one Windows PC is slow or unstable: disk health and errors, memory
 
 ### [Network Inventory](network-inventory)
 
-Finds every device on a subnet and reports its IP address, host name, MAC address, vendor and open ports as CSV or an HTML report. Fast parallel discovery that also catches devices that block ping, vendor lookup against the IEEE list, and nothing changed on the network.
+Writes CSV or an HTML report. Discovery runs in parallel and also finds devices that block ping, vendors come from the IEEE list, and nothing on the network is changed.
 
 <p align="center">
   <a href="network-inventory"><img src="network-inventory/screenshot.png" width="640" alt="Network Inventory HTML report with sample data: totals, devices per vendor, open ports and the list of devices"></a>
@@ -60,17 +60,16 @@ Finds every device on a subnet and reports its IP address, host name, MAC addres
 
 ### [GitHub File Distribution](github-file-distribution-docs)
 
-A system for distributing one update file from GitHub to many remote locations. Each location downloads the file, verifies it against a published SHA-256 checksum, replaces its local copy atomically, and reports its status to a separate GitHub repository. A second script lets an administrator confirm which locations completed the update.
+Each location downloads the file, verifies it against a published SHA-256 checksum, replaces its local copy in one step and reports its status to a separate GitHub repository. A second script tells the administrator which locations have the update.
 
 ### [Duplicate Finder](duplicate-finder)
 
-A local web app for finding and safely removing duplicate files and folders on Windows. It finds files with identical content and whole duplicate folders, runs as a small local web server with a browser UI, and only deletes through the Recycle Bin after explicit confirmation.
+A small web server on this computer with a page in the browser. It finds files with identical content and whole duplicate folders, and deletes only through the Recycle Bin, after a confirmation.
 
 [![Duplicate Finder results with sample data: duplicate files and a duplicate backup folder, one copy selected for deletion](duplicate-finder/screenshot.png)](duplicate-finder)
 
 ## Skills Demonstrated
 
-- PowerShell scripting and automation
 - Active Directory user lifecycle with the ActiveDirectory module, with `-WhatIf` support
 - Network discovery: ping sweep, ARP table, MAC vendor lookup and TCP port checks
 - Remote health checks over CIM (WinRM and DCOM), including registry reads with StdRegProv
@@ -79,7 +78,6 @@ A local web app for finding and safely removing duplicate files and folders on W
 - REST APIs (GitHub Contents API) and a local HTTP server
 - File integrity checks (SHA-256) and atomic file replacement
 - Unattended runs, safe for Windows Task Scheduler
-- Operational reporting
 - Code checks on every change: syntax in Windows PowerShell 5.1 and PowerShell 7, plus PSScriptAnalyzer, in GitHub Actions
 
 ## License

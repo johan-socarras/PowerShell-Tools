@@ -40,11 +40,12 @@ param(
     [switch]$PauseAtEnd
 )
 
+# Windows PowerShell 5.1 may not offer TLS 1.2 by default, and GitHub requires it.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
 # ==========================================
 # CONFIGURATION
 # ==========================================
-
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 # The administrator publishes both files. The checksum file must contain the SHA-256 hash
 # of the update file (for example: "ABCD... UpdatePackage.txt").
@@ -188,11 +189,6 @@ function Get-HttpStatusCode {
     return $null
 }
 
-function Get-DownloadedSha256 {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash.ToUpperInvariant()
-}
-
 try {
     Test-Configuration
     Send-PendingReport
@@ -232,7 +228,7 @@ try {
         $expectedHash = ([regex]::Match($checksumText, '(?i)\b[a-f0-9]{64}\b')).Value.ToUpperInvariant()
         if ([string]::IsNullOrWhiteSpace($expectedHash)) { throw 'The checksum file does not contain a SHA-256 hash.' }
 
-        $downloadedHash = Get-DownloadedSha256 -Path $tempFile
+        $downloadedHash = (Get-FileHash -LiteralPath $tempFile -Algorithm SHA256 -ErrorAction Stop).Hash
         if ($downloadedHash -ne $expectedHash) { throw 'Downloaded file hash does not match the published checksum.' }
     } catch {
         Write-Warning "Checksum validation failed: $($_.Exception.Message)"
@@ -242,7 +238,7 @@ try {
     }
 
     if (Test-Path -LiteralPath $Destination) {
-        if ((Get-DownloadedSha256 -Path $Destination) -eq $downloadedHash) {
+        if ((Get-FileHash -LiteralPath $Destination -Algorithm SHA256 -ErrorAction Stop).Hash -eq $downloadedHash) {
             Write-Host 'File already up to date.' -ForegroundColor Yellow
             $null = Send-Report -Status 'File Already Updated'
             Write-CompletionPause
@@ -252,7 +248,7 @@ try {
 
     # Stage beside the destination so the final replace is atomic on the local volume.
     Copy-Item -LiteralPath $tempFile -Destination $stagedFile -Force -ErrorAction Stop
-    if ((Get-DownloadedSha256 -Path $stagedFile) -ne $downloadedHash) {
+    if ((Get-FileHash -LiteralPath $stagedFile -Algorithm SHA256 -ErrorAction Stop).Hash -ne $downloadedHash) {
         throw 'The staged file hash does not match the downloaded file.'
     }
 

@@ -761,7 +761,7 @@ function Invoke-NetworkCheck {
                 $reply = $ping.Send($gateway, 1000)
                 if ($reply.Status -eq 'Success') { $reply.RoundtripTime }
             } catch {
-                $null = $_
+                Write-Verbose "Ping to the gateway $gateway failed: $($_.Exception.Message)"
             }
         })
         $gatewayText = if ($replies.Count -gt 0) { "gateway $gateway (answered in $(($replies | Measure-Object -Maximum).Maximum) ms)" } else { "gateway $gateway (did not answer ping)" }
@@ -864,7 +864,7 @@ function Invoke-FolderCleanup {
                     $result.Folders++
                 }
             } catch {
-                $null = $_
+                Write-Verbose "Folder left in place: $($folder.FullName): $($_.Exception.Message)"
             }
         }
     }
@@ -1155,10 +1155,7 @@ td.nowrap { white-space: nowrap; }
         }
         $null = $sb.AppendLine('</div>')
         $null = $sb.AppendLine('<table><tr><th>Status</th><th>Area</th><th>Finding</th><th>What to do</th></tr>')
-        $i = 0
-        $ordered = $Findings | ForEach-Object { [pscustomobject]@{ Item = $_; Rank = $script:StatusRank[$_.Status]; Order = $i }; $i++ } | Sort-Object -Property Rank, Order
-        foreach ($row in $ordered) {
-            $f = $row.Item
+        foreach ($f in @(Get-OrderedFinding -Findings $Findings)) {
             $null = $sb.AppendLine("<tr><td><span class=""badge $($f.Status)"">$($f.Status)</span></td><td class=""nowrap"">$(& $encode $f.Area)</td><td>$(& $encode $f.Finding)</td><td>$(& $encode $f.Advice)</td></tr>")
         }
         $null = $sb.AppendLine('</table>')
@@ -1192,6 +1189,27 @@ function Get-SuggestedTask {
     return $script:TaskCatalog | Where-Object { $_.Name -in $names } | ForEach-Object { $_.Name }
 }
 
+function Get-OrderedFinding {
+    # The worst first; within one status, in the order the checks found them. Used by the report and
+    # by the window, which reads the findings back from the JSON file.
+    param([object[]]$Findings)
+    $i = 0
+    $Findings | Where-Object { $_ } | ForEach-Object { [pscustomobject]@{ Item = $_; Rank = $script:StatusRank["$($_.Status)"]; Order = $i }; $i++ } |
+        Sort-Object -Property Rank, Order | ForEach-Object { $_.Item }
+}
+
+function Get-RunSummary {
+    # One line, such as "Check: 1 critical, 5 warnings. Tasks: 3 run, 0 failed.", for the log and the window.
+    param([object[]]$Findings, [object[]]$Tasks, [bool]$Checked)
+    $counts = foreach ($status in 'Critical', 'Warning') {
+        $n = @($Findings | Where-Object { $_.Status -eq $status }).Count
+        if ($n -gt 0) { "$n $($status.ToLowerInvariant())$(if ($status -eq 'Warning' -and $n -gt 1) { 's' })" }
+    }
+    $line = if ($Checked) { "Check: $(if ($counts) { $counts -join ', ' } else { 'nothing critical or to watch' })." } else { '' }
+    if (@($Tasks).Count -gt 0) { $line += " Tasks: $(@($Tasks).Count) run, $(@($Tasks | Where-Object { $_.Status -eq 'Failed' }).Count) failed." }
+    return $line.Trim()
+}
+
 function Invoke-Run {
     # The run without a window: what the command line and the window's worker process both use.
     param([string[]]$TaskNames)
@@ -1221,14 +1239,8 @@ function Invoke-Run {
     if ($JsonPath) {
         [System.IO.File]::WriteAllText($JsonPath, (ConvertTo-Json -InputObject $output -Depth 6), $script:Utf8)
     }
-    $counts = foreach ($status in 'Critical', 'Warning') {
-        $n = @($findings | Where-Object { $_.Status -eq $status }).Count
-        if ($n -gt 0) { "$n $($status.ToLowerInvariant())$(if ($status -eq 'Warning' -and $n -gt 1) { 's' })" }
-    }
-    $failed = @($tasks | Where-Object { $_.Status -eq 'Failed' }).Count
-    $line = if ($Check) { "Check: $(if ($counts) { $counts -join ', ' } else { 'nothing critical or to watch' })." } else { '' }
-    if ($tasks.Count -gt 0) { $line += " Tasks: $($tasks.Count) run, $failed failed." }
-    Write-MaintenanceLog -Message $line.Trim() -Level $(if ($counts -or $failed) { 'WARN' } else { 'OK' })
+    $attention = @($findings | Where-Object { $_.Status -in 'Critical', 'Warning' }).Count + @($tasks | Where-Object { $_.Status -eq 'Failed' }).Count
+    Write-MaintenanceLog -Message (Get-RunSummary -Findings $findings -Tasks $tasks -Checked $Check.IsPresent) -Level $(if ($attention -gt 0) { 'WARN' } else { 'OK' })
     Write-MaintenanceLog -Message "Report: $script:ReportFile"
     return $output
 }
@@ -1244,7 +1256,7 @@ function Get-WindowSetting {
             if ($saved.ReportFolder) { return [pscustomobject]@{ ReportFolder = "$($saved.ReportFolder)" } }
         }
     } catch {
-        $null = $_
+        Write-Verbose "Saved settings not read, using the defaults: $($_.Exception.Message)"
     }
     return [pscustomobject]@{ ReportFolder = $default }
 }
@@ -1257,7 +1269,7 @@ function Save-WindowSetting {
         $json = ConvertTo-Json -InputObject ([pscustomobject]@{ ReportFolder = $ReportFolder })
         [System.IO.File]::WriteAllText((Join-Path $folder 'settings.json'), $json, $script:Utf8)
     } catch {
-        $null = $_
+        Write-Verbose "Settings not saved: $($_.Exception.Message)"
     }
 }
 
@@ -1295,7 +1307,7 @@ function Invoke-WorkerRun {
                 'TempFiles' { if ($asAdmin) { 'every user and Windows\Temp' } else { 'the current user only' } }
                 'RecycleBin' { if ($asAdmin) { 'every user on this PC, cannot be undone' } else { 'the current user, cannot be undone' } }
                 'UpdateCache' { 'Windows downloads again what it still needs' }
-                'RepairWindows' { '10 to 30 minutes; do not turn the PC off' }
+                'RepairWindows' { '30 minutes to 2 hours; do not turn the PC off' }
                 default { '' }
             }
             '- ' + $definition.Title + $(if ($note) { " ($note)" } else { '' })
@@ -1354,7 +1366,8 @@ function Show-WindowLog {
         $script:Ui.Log.SelectionStart = $text.Length
         $script:Ui.Log.ScrollToCaret()
     } catch {
-        $null = $_
+        # The worker may be writing the log right now; the next tick reads it.
+        Write-Verbose "Log not read this time: $($_.Exception.Message)"
     }
 }
 
@@ -1376,10 +1389,7 @@ function Show-WindowResult {
         $ui.Status.Text = 'The run ended without results. See the Log tab.'
         return
     }
-    $i = 0
-    $ordered = @($data.Findings) | Where-Object { $_ } | ForEach-Object { [pscustomobject]@{ Item = $_; Rank = $script:StatusRank["$($_.Status)"]; Order = $i }; $i++ } | Sort-Object -Property Rank, Order
-    foreach ($row in $ordered) {
-        $f = $row.Item
+    foreach ($f in @(Get-OrderedFinding -Findings @($data.Findings))) {
         $item = New-Object System.Windows.Forms.ListViewItem("$($f.Status)")
         foreach ($text in $f.Area, $f.Finding, $f.Advice) { [void]$item.SubItems.Add("$text") }
         if ($colors.ContainsKey("$($f.Status)")) { $item.BackColor = $colors["$($f.Status)"] }
@@ -1396,14 +1406,8 @@ function Show-WindowResult {
     $script:SuggestedTasks = @($data.Suggested | Where-Object { $_ })
     $ui.Suggested.Text = if ($script:SuggestedTasks.Count -gt 0) { "Tick suggested tasks ($($script:SuggestedTasks.Count))" } else { 'Tick suggested tasks' }
     $findings = @($data.Findings | Where-Object { $_ })
-    $parts = foreach ($status in 'Critical', 'Warning') {
-        $n = @($findings | Where-Object { $_.Status -eq $status }).Count
-        if ($n -gt 0) { "$n $($status.ToLowerInvariant())$(if ($status -eq 'Warning' -and $n -gt 1) { 's' })" }
-    }
-    $summary = if ($findings.Count -gt 0) { "Check: $(if ($parts) { $parts -join ', ' } else { 'nothing critical or to watch' })." } else { '' }
-    $tasks = @($data.Tasks | Where-Object { $_ })
-    if ($tasks.Count -gt 0) { $summary += " Tasks: $($tasks.Count) run, $(@($tasks | Where-Object { $_.Status -eq 'Failed' }).Count) failed." }
-    $ui.Status.Text = $summary.Trim() + ' The report is ready. Double-click a row to read all of it.'
+    $summary = Get-RunSummary -Findings $findings -Tasks @($data.Tasks | Where-Object { $_ }) -Checked ($findings.Count -gt 0)
+    $ui.Status.Text = ("$summary The report is ready. Double-click a row to read all of it.").Trim()
     $ui.ReportButton.Enabled = Test-Path -LiteralPath $script:Run.Report
     $ui.Tabs.SelectedIndex = 0
 }
@@ -1612,14 +1616,14 @@ function Initialize-MainWindow {
         else { [void][System.Windows.Forms.MessageBox]::Show('The report folder does not exist yet. It is created on the first run.', 'Report folder') }
     })
     $form.Add_FormClosing({
-        param($s, $e)
-        $null = $s
+        # In an event handler, $_ holds the event arguments.
+        $closing = $_
         $process = if ($script:Run) { $script:Run.Process } else { $null }
         $running = $false
         try { $running = $null -ne $process -and -not $process.HasExited } catch { $running = $false }
         if ($running) {
             $answer = [System.Windows.Forms.MessageBox]::Show('The run is still going. Closing the window does not stop it, but you will not see the result here. Close anyway?', 'Still running', 'YesNo', 'Warning')
-            if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { $e.Cancel = $true }
+            if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { $closing.Cancel = $true }
         }
     })
     return $form
